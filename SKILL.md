@@ -40,6 +40,12 @@ $S neo-oracle laris-co/oracle-gods-eys-os           # #repo, thread owner/repo, 
 
 Restart a body later with `RESUME=1 <wt>/.discord/launch.sh` (keeps its conversation).
 
+Move a LIVE body (built before 2026-11-07) to #repo › owner/repo: `$S <oracle> <owner>/<repo> --migrate --dry`, then
+without `--dry`. It rewrites access.json, launch.sh, CLAUDE.local.md (backups `.bak-<ts>-migrate`) and the Laris rows
+(new thread added; old thread row kept with note "moved to #repo", requireMention true). It never opens a pane or
+starts claude: re-running the plain script on a live body starts a second claude on the same bot token (rival gateway).
+Then quit the live claude in its pane and run the printed `restart: herdr pane run <pane> 'RESUME=1 <wt>/.discord/launch.sh'`.
+
 Then wait (Monitor, never sleep) for `<wt>/.discord/status.json` `gateway.ready`, and brief the pane:
 `herdr agent prompt <pane> "Read CLAUDE.local.md, post one hello in thread <id>"`. Confirm the hello in Discord
 comes from the oracle's bot name, not "Laris Labs Oracle".

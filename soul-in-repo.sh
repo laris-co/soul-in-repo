@@ -1,5 +1,8 @@
 #!/usr/bin/env zsh
-# soul-in-repo.sh <oracle> <repo> [--category <id>] [--dry]
+# soul-in-repo.sh <oracle> <repo> [--category <id>] [--migrate] [--dry]
+#   --migrate  move a LIVE body to #repo › <owner>/<repo>: rewrite its access.json, CLAUDE.local.md, launch.sh
+#              (backups beside them) and the Laris rows; NO worktree, trust, pane or launch (a second claude on
+#              the same bot token = rival gateway). Prints the restart line for the existing pane.
 #   <oracle>  e.g. neo-oracle  (soul = $(ghq root)/github.com/laris-co/<oracle>, bot = pass discord/<oracle>-token)
 #   <repo>    owner/name (in ghq) or an absolute path
 # One guild, many repos (Nat 2026-11-07, was channel = oracle since 2026-11-05): ONE channel #repo,
@@ -11,8 +14,8 @@
 set -euo pipefail
 oracle=${1:?oracle}; repo=${2:?repo}; shift 2
 CAT=1560847801838215259   # 🔬・research category
-DRY=0
-while (( $# )); do case $1 in --category) CAT=$2; shift 2;; --dry) DRY=1; shift;; *) echo "unknown $1"; exit 2;; esac; done
+DRY=0; MIG=0
+while (( $# )); do case $1 in --category) CAT=$2; shift 2;; --dry) DRY=1; shift;; --migrate) MIG=1; shift;; *) echo "unknown $1"; exit 2;; esac; done
 GUILD=1560847800881643520
 NAT=691531480689541170; CB=917019242094817301
 TEAM=/opt/Code/github.com/laris-co/laris-team
@@ -37,6 +40,20 @@ echo "plan: #$CHN > thread $full (find or create; reuse + unarchive if it exists
 echo "      worktree $W (branch soul/$oracle) · bot $oracle · claude $ctok · DISCORD_ORACLE=$oracle"
 echo "      ears: that thread, requireMention true (shared by every soul of $full) · eyes: guild read-only"
 echo "      Laris row: that thread, requireMention true (silent unless tagged)"
+S=${HERDR_SESSION:-laris-co}
+if (( MIG )); then
+  [[ -f $W/.discord/access.json ]] || { echo "migrate: no live body at $W (no .discord/access.json)"; echo "  build it instead: $0 $oracle $repo"; exit 1; }
+  OLD=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),""))' $W/.discord/access.json)
+  # the pane that runs this body now (herdr pane list, matched on cwd)
+  P=$(herdr --session $S pane list 2>/dev/null | python3 -c 'import json,sys
+w=sys.argv[1]
+try: print(next((p["pane_id"] for p in json.load(sys.stdin)["result"]["panes"] if (p.get("foreground_cwd") or p.get("cwd"))==w),""))
+except Exception: print("")' $W)
+  echo "migrate: old thread ${OLD:-none} -> #$CHN › $full · live pane ${P:-not found}"
+  echo "      rewrite (backup .bak-<ts>-migrate beside each): $W/.discord/access.json, $W/.discord/launch.sh, $W/CLAUDE.local.md"
+  echo "      Laris: add/merge new thread row; old thread row ${OLD:-none} kept, note 'moved to #repo', requireMention true"
+  echo "      skip: worktree, trust, herdr pane, launch, hello"
+fi
 (( DRY )) && { echo "dry: nothing touched"; exit 0; }
 
 T=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
@@ -74,9 +91,14 @@ else
 fi
 # 2b. add the humans to the thread (Nat 2026-11-05: "When new thread add human")
 for u in $NAT $CB; do api -o /dev/null -w "add human $u %{http_code}\n" -X PUT https://discord.com/api/v10/channels/$TH/thread-members/$u; done
-# 3. worktree + soul note
-git -C $R fetch -q origin main 2>/dev/null || true
-[[ -d $W ]] || git -C $R worktree add -q -b soul/$oracle $W origin/main 2>/dev/null || git -C $R worktree add -q $W soul/$oracle
+# 3. worktree + soul note (migrate: worktree exists; back up the 3 files it rewrites, Nothing is Deleted)
+if (( MIG )); then
+  ts=$(date +%Y%m%d-%H%M%S)
+  for f in $W/.discord/access.json $W/.discord/launch.sh $W/CLAUDE.local.md; do [[ -f $f ]] && cp -p $f $f.bak-$ts-migrate; done
+else
+  git -C $R fetch -q origin main 2>/dev/null || true
+  [[ -d $W ]] || git -C $R worktree add -q -b soul/$oracle $W origin/main 2>/dev/null || git -C $R worktree add -q $W soul/$oracle
+fi
 mkdir -p $W/.discord
 cat > $W/.discord/access.json <<J
 { "dmPolicy": "allowlist", "allowFrom": [], "pending": {},
@@ -111,6 +133,7 @@ export CLAUDE_TOKEN_NAME=$ctok
 exec claude --dangerously-skip-permissions --channels=plugin:discord@claude-plugins-official \${RESUME:+--continue} --append-system-prompt "\$(cat '$soul/CLAUDE.md')"
 L
 chmod +x $W/.discord/launch.sh
+if (( ! MIG )); then
 # 4. pre-trust the new folder (same as tools/laris-wt.sh)
 python3 - $W <<'PY'
 import json, os, sys
@@ -120,7 +143,6 @@ tmp = f + ".soul-in-repo"; json.dump(d, open(tmp, "w"), indent=2); os.replace(tm
 PY
 # 5. its OWN space nested under the repo (herdr worktree open), never a split in the caller's space:
 #    a split hides the body under the caller's repo in the sidebar (Nat 2026-11-05: "no herdr session? how come?")
-S=${HERDR_SESSION:-laris-co}
 wsof() { herdr --session $S worktree list --cwd "$R" | python3 -c 'import sys,json
 try: print(json.load(sys.stdin)["result"]["source"].get("source_workspace_id") or "")
 except Exception: print("")'; }
@@ -128,17 +150,27 @@ MWS=$(wsof); [[ -n $MWS ]] || { herdr --session $S workspace create --cwd "$R" -
 P=$(herdr --session $S worktree open --workspace "$MWS" --path "$W" --label "wt/$oracle-soul" --no-focus \
   | python3 -c 'import sys,re; print(re.search(r"\"pane_id\": ?\"([^\"]+)\"", sys.stdin.read()).group(1))')
 herdr --session $S pane run $P "$W/.discord/launch.sh" >/dev/null
+fi
 # 6. Laris host row: hears (own thread), answers only when tagged
 L=$HOME/.claude/channels/laris-labs-oracle/access.local.json
 cp $L $L.bak-$(date +%Y%m%d-%H%M%S)-soul-$name
-python3 - $L $TH "$oracle" "$full" <<'PY'
+python3 - $L $TH "$oracle" "$full" "${OLD:-}" <<'PY'
 import json, sys
-f, th, o, n = sys.argv[1:]; a = json.load(open(f))
+f, th, o, n, old = sys.argv[1:]; a = json.load(open(f))
+if old and old != th and old in a.get("groups", {}):
+    r = a["groups"][old]; r["requireMention"] = True
+    r["note"] = f"moved to #repo › {n} (2026-11-07 layout); kept, not deleted. was: {r.get('note', '')}"[:500]
 row = a.setdefault("groups", {}).get(th, {})
 souls = sorted(set(row.get("souls", [])) | {o})
 a["groups"][th] = {"requireMention": True, "allowFrom": ["691531480689541170", "917019242094817301"], "souls": souls,
   "note": f"repo thread {n}: souls {', '.join(souls)} answer with their own bots when tagged; Laris hears (own thread), silent unless tagged"}
 json.dump(a, open(f, "w"), indent=2)
 PY
+if (( MIG )); then
+  echo "done: migrated $oracle to #$CHN ($CH) > $full ($TH) · $W"
+  echo "the live claude still runs the OLD files: quit it in pane ${P:-<pane>} (/exit), then"
+  echo "restart: herdr pane run ${P:-<pane>} 'RESUME=1 $W/.discord/launch.sh'"
+  exit 0
+fi
 echo "done: #$CHN ($CH) > $full ($TH) · $W · pane $P"
 echo "next: wait for $W/.discord/status.json gateway.ready, then: herdr agent prompt $P 'Read CLAUDE.local.md, post one hello in thread $TH'"
