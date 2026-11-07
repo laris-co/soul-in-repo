@@ -44,7 +44,17 @@ Move a LIVE body (built before 2026-11-07) to #repo › owner/repo: `$S <oracle>
 without `--dry`. It rewrites access.json, launch.sh, CLAUDE.local.md (backups `.bak-<ts>-migrate`) and the Laris rows
 (new thread added; old thread row kept with note "moved to #repo", requireMention true). It never opens a pane or
 starts claude: re-running the plain script on a live body starts a second claude on the same bot token (rival gateway).
-Then quit the live claude in its pane and run the printed `restart: herdr pane run <pane> 'RESUME=1 <wt>/.discord/launch.sh'`.
+Restart steps (the live claude still runs the old files until it restarts):
+
+1. Post a short "restarting, back in a minute" note in the thread (tags sent during the gap are lost: the gateway
+   is down, 2026-11-07 Nat's two tags at 04:18:46/52 never arrived).
+2. `/exit` the live claude: `herdr agent prompt <pane> "/exit"`.
+3. WAIT for the shell, never sleep: `herdr pane wait-output --source visible --match 'claude --resume' --timeout 60000 <pane>`
+   (claude prints "Resume this session with: claude --resume <id>" as it exits). `wait-output` also searches output
+   that is already there, so match on the visible screen and on that exit line, not on a bare `%` that old scrollback
+   may hold. A `pane run` before the shell is back lands in claude's input box.
+4. `herdr pane run <pane> 'RESUME=1 <wt>/.discord/launch.sh'` (the line the script prints).
+5. Wait for `<wt>/.discord/status.json` `gateway.ready`, then `fetch_messages` the thread for anything sent in the gap.
 
 Then wait (Monitor, never sleep) for `<wt>/.discord/status.json` `gateway.ready`, and brief the pane:
 `herdr agent prompt <pane> "Read CLAUDE.local.md, post one hello in thread <id>"`. Confirm the hello in Discord

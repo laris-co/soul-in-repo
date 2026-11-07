@@ -121,7 +121,7 @@ Your soul ($soul/CLAUDE.md) is appended at start. The repo's own CLAUDE.md is th
 - Talk to other agents with \`herdr agent prompt <pane> "..."\` (bots do not hear bots in Discord).
 MD
 ex=$(git -C $W rev-parse --git-common-dir)/info/exclude
-for l in .discord/ CLAUDE.local.md; do grep -qxF $l $ex 2>/dev/null || echo $l >> $ex; done
+for l in .discord/ CLAUDE.local.md 'CLAUDE.local.md.bak-*'; do grep -qxF $l $ex 2>/dev/null || echo $l >> $ex; done
 cat > $W/.discord/launch.sh <<L
 #!/bin/zsh
 cd '$W'
@@ -162,7 +162,7 @@ if old and old != th and old in a.get("groups", {}):
     r["note"] = f"moved to #repo › {n} (2026-11-07 layout); kept, not deleted. was: {r.get('note', '')}"[:500]
 row = a.setdefault("groups", {}).get(th, {})
 souls = sorted(set(row.get("souls", [])) | {o})
-a["groups"][th] = {"requireMention": True, "allowFrom": ["691531480689541170", "917019242094817301"], "souls": souls,
+a["groups"][th] = {"requireMention": True, "allowFrom": ["691531480689541170", "917019242094817301"], "souls": souls, "repo": n,
   "note": f"repo thread {n}: souls {', '.join(souls)} answer with their own bots when tagged; Laris hears (own thread), silent unless tagged"}
 json.dump(a, open(f, "w"), indent=2)
 PY
