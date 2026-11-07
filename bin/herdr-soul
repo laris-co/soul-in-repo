@@ -4,21 +4,22 @@
 #   herdr-soul ls    [repo]              souls living in a repo: worktree, thread, pane, gateway ready?
 #   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
 #   herdr-soul in    <oracle> [repo]     check, then soul-in-repo.sh (channel, thread, worktree, space, Laris row, hello)
-#                                        --migrate / --deny-main are passed through to soul-in-repo.sh
+#                                        --migrate / --deny-main / --chname=dash / --channel=<id> are passed through to soul-in-repo.sh
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
-# Laris rows (2026-11-07 layout): one row per #repo thread, souls[] = who lives there. Old rows ('<oracle> soul in
-# <repo>') still count until the body is migrated; rows whose note starts 'moved to #repo' are history, never live.
+# Laris rows, newest first. layout 9 (2026-11-07 06:34Z): one row per repo CHANNEL (<owner>∕<repo>), "layout": 9,
+# souls[] + threads{oracle: thread}. #repo layout (morning of 2026-11-07): one row per #repo thread, souls[]. Old rows
+# ('<oracle> soul in <repo>') still count until the body is migrated. Notes starting 'moved to' are history, never live.
 # [repo] = owner/name, an absolute path, or empty = the git repo of the current directory.
 # Every verb accepts --dry. Tokens come from pass and are never printed.
 set -euo pipefail
 HERE=${0:A:h}
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
-LARIS=$HOME/.claude/channels/laris-labs-oracle/access.local.json
+LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}   # override for tests
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 DRY=0; GO=0; ARGS=(); PASS=()   # PASS = flags handed to soul-in-repo.sh by `in`
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main) PASS+=$a;; *) ARGS+=$a;; esac; done
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -34,17 +35,20 @@ repo_full() {  # $1 = repo path -> <owner>/<repo> (origin, else the ghq path), s
   [[ $f = */* ]] || f=${1#$GHQ/github.com/}
   echo $f
 }
-rows() {  # Laris soul rows, one line per soul: <thread> <layout new|old> <oracle> <repo>   (history rows skipped)
+rows() {  # Laris soul rows, one line per soul: <thread> <layout l9|repo|old> <oracle> <repo>   (history rows skipped)
   python3 - "$LARIS" <<'PY'
 import json,re,sys
 try: g=json.load(open(sys.argv[1])).get("groups",{})
 except Exception: g={}
 for th,v in g.items():
     note=v.get("note","")
-    if note.startswith("moved to #repo"): continue
+    if note.startswith("moved to"): continue
+    if v.get("layout")==9:
+        for o in v.get("souls",[]): print(v.get("threads",{}).get(o,"-"),"l9",o,v.get("repo","?"))
+        continue
     if "souls" in v:
         m=re.match(r"repo thread (\S+?):",note); repo=v.get("repo") or (m.group(1) if m else "?")
-        for o in v["souls"]: print(th,"new",o,repo)
+        for o in v["souls"]: print(th,"repo",o,repo)
         continue
     m=re.match(r"(\S+?)(?:-oracle)? soul in (\S+)",note)
     if m: print(th,"old",m.group(1).lower().removesuffix("-oracle")+"-oracle",m.group(2))
@@ -66,7 +70,7 @@ list)
     tok=$(has_pass discord/$o-token && echo ✓ || echo ✗)
     ct=$(cfg $o claude_token); ct=${ct:-t3}
     m=$(cfg $o machine); m=${m:--}
-    where=$(print -r -- $where_all | awk -v k=$o '$3==k{printf "%s%s%s", sep, $4, ($2=="old"?" (old layout)":""); sep=", "}')
+    where=$(print -r -- $where_all | awk -v k=$o '$3==k{printf "%s%s%s", sep, $4, ($2=="old"?" (old layout)":($2=="repo"?" (#repo layout)":"")); sep=", "}')
     printf "%-32s %-5s %-6s %-7s %-8s %s\n" $o $soul $tok $ct $m "${where:--}"
   done
   ;;
@@ -87,9 +91,25 @@ try:
   print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),"-"))
 except Exception: print("-")' $W)
     lay=$(print -r -- $where_all | awk -v t=$th -v o=$o '$1==t && $3==o{print $2}' | head -1)
-    echo "  $o  thread $th${lay:+ ($lay layout)}  pane $pane  gateway $ready  ($W)"
+    case $lay in l9) lay="layout 9";; repo) lay="#repo layout";; old) lay="old layout";; esac
+    echo "  $o  thread $th${lay:+ ($lay)}  pane $pane  gateway $ready  ($W)"
   done
-  print -r -- $where_all | awk -v r=$full '$2=="new" && $4==r{t=$1; s=s (s?", ":"") $3} END{if(t) print "  Laris: #repo › " r " (" t ") souls: " s; else print "  Laris: no #repo thread for " r " yet"}'
+  python3 - "$LARIS" "$full" <<'PY2'
+import json,sys
+f,r=sys.argv[1:]
+try: g=json.load(open(f)).get("groups",{})
+except Exception: g={}
+import re
+def repo_of(v):
+    m=re.match(r"repo thread (\S+?):",v.get("note",""))
+    return v.get("repo") or (m.group(1) if m else "")
+out=[]
+for k,v in g.items():
+    if repo_of(v)!=r or v.get("note","").startswith("moved to"): continue
+    if v.get("layout")==9: out.append(f"  Laris: channel {v.get('channel','?')} ({k}, layout 9) souls: "+", ".join(f"{o} › {v.get('threads',{}).get(o,'-')}" for o in v.get("souls",[])))
+    elif "souls" in v: out.append(f"  Laris: #repo › {r} ({k}) souls: "+", ".join(v["souls"]))
+print("\n".join(out) or f"  Laris: no row for {r} yet")
+PY2
   ;;
 
 check)
@@ -108,14 +128,14 @@ check)
     [[ -d $W ]] && echo "  • worktree already there: $W (in will reuse it)" || ok "no worktree yet"
   fi
   name=${R:t}; full=$(repo_full $R); where_all=$(rows)
-  newth=$(print -r -- $where_all | awk -v r=$full '$2=="new" && $4==r{print $1; exit}')
-  if print -r -- $where_all | awk -v r=$full -v o=$o '$2=="new" && $4==r && $3==o{f=1} END{exit !f}'; then
-    bad "$o is already a soul of #repo › $full ($newth)" "nothing to do; to rebuild its body: zsh $SCRIPT $o $full --migrate --dry"
-  elif print -r -- $where_all | awk -v r=$name -v o=$o '$2=="old" && $4==r && $3==o{f=1} END{exit !f}'; then
-    bad "$o still lives in its old-layout thread for $name" "zsh $SCRIPT $o $full --migrate --dry"
-  elif [[ -n $newth ]]; then
-    echo "  • thread exists: reuse (#repo › $full, $newth)"
-  else ok "no #repo thread for $full yet (in will open it)"; fi
+  l9=$(print -r -- $where_all | awk -v r=$full '$2=="l9" && $4==r{print $3}' | paste -sd, -)
+  if print -r -- $where_all | awk -v r=$full -v o=$o '$2=="l9" && $4==r && $3==o{f=1} END{exit !f}'; then
+    bad "$o is already a soul of $full (layout 9)" "nothing to do; to rebuild its body: zsh $SCRIPT $o $full --migrate --dry"
+  elif print -r -- $where_all | awk -v r=$full -v n=$name -v o=$o '$3==o && (($2=="repo" && $4==r) || ($2=="old" && $4==n)){f=1} END{exit !f}'; then
+    bad "$o still lives in an older layout for $full (#repo or #$o thread)" "zsh $SCRIPT $o $full --migrate --dry"
+  elif [[ -n $l9 ]]; then
+    echo "  • repo channel exists (layout 9, souls: $l9): in adds thread '$o' to it"
+  else ok "no layout-9 channel for $full yet (in will open it)"; fi
   m=$(cfg $o machine)
   [[ -n $m ]] && echo "  • main body lives on $m: a new thread is in no other access file, so no double answers"
   (( fail )) && { echo "result: NOT ready"; exit 1; } || echo "result: ready"
@@ -137,18 +157,29 @@ out)
   dirty=$(git -C $W status --porcelain | wc -l | tr -d ' ')
   ahead=$(git -C $W rev-list --count @{u}..HEAD 2>/dev/null || git -C $W rev-list --count origin/main..HEAD 2>/dev/null || echo "?")
   # who else lives in this thread? (new layout: souls[]; old layout or no row: just this soul)
+  # layout 9: the row is the repo CHANNEL's; this soul's own thread is always archived
+  key=$(python3 -c 'import json,sys
+f,t,o=sys.argv[1:]
+try: g=json.load(open(f)).get("groups",{})
+except Exception: g={}
+print(next((k for k,v in g.items() if v.get("layout")==9 and v.get("threads",{}).get(o)==t),t))' $LARIS ${th:-x} $o)
+  l9=$([[ $key != ${th:-x} ]] && echo 1 || echo 0)
   left=$(python3 -c 'import json,sys
 f,t,o=sys.argv[1:]
 try: r=json.load(open(f)).get("groups",{}).get(t)
 except Exception: r=None
 if r is None: print("norow")
 elif "souls" in r: print(" ".join(s for s in r["souls"] if s!=o) or "none")
-else: print("none")' $LARIS ${th:-x} $o)
+else: print("none")' $LARIS ${key:-x} $o)
   echo "plan: take $o out of ${R:t}"
   echo "  1. close pane ${pane:-none}"
   if [[ $left = norow ]]; then
     echo "  2. no Laris row for thread ${th:-?}: nothing to change there"
     echo "  3. thread ${th:-?} not archived (no row says who lives in it)"
+  elif (( l9 )); then
+    [[ $left = none ]] && echo "  2. remove Laris row for channel $key ($o was the last soul; backup first; the channel stays)" \
+                       || echo "  2. drop $o from souls[] and threads{} of channel $key (backup first); stays: $left"
+    echo "  3. archive thread ${th:-?} ($o's own thread; Nothing is Deleted: it stays readable)"
   elif [[ $left = none ]]; then
     echo "  2. remove Laris row for thread ${th:-?} ($o was the last soul; backup first)"
     echo "  3. archive thread ${th:-?} (Nothing is Deleted: it stays readable)"
@@ -164,13 +195,16 @@ else: print("none")' $LARIS ${th:-x} $o)
     python3 -c 'import json,sys
 f,t,o=sys.argv[1:]; a=json.load(open(f)); g=a.get("groups",{}); r=g.get(t,{})
 rest=[s for s in r.get("souls",[]) if s!=o]
-if rest:
+if rest and r.get("layout")==9:
+    r["souls"]=rest; r.get("threads",{}).pop(o,None)
+    r["note"]="repo channel %s (layout 9): souls %s each answer in their own thread; Laris hears tags only, never types" % (r.get("channel","?"), ", ".join(rest))
+elif rest:
     r["souls"]=rest
     r["note"]=r.get("note","").split(": souls ")[0]+": souls "+", ".join(rest)+" answer with their own bots when tagged; Laris hears (own thread), silent unless tagged"
 else: g.pop(t,None)
-json.dump(a,open(f,"w"),indent=2)' $LARIS $th $o && echo "  ✓ Laris row updated ($o out)"
+json.dump(a,open(f,"w"),indent=2)' $LARIS $key $o && echo "  ✓ Laris row updated ($o out)"
   fi
-  if [[ -n $th && $left = none ]]; then
+  if [[ -n $th ]] && { (( l9 )) || [[ $left = none ]]; }; then
     T=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
     code=$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH -H "Authorization: Bot $T" -H 'Content-Type: application/json' \
       -d '{"archived":true}' https://discord.com/api/v10/channels/$th)
