@@ -1,23 +1,25 @@
 # soul-in-repo
 
-Put an oracle's **soul** to work inside **another repo**, with its own Discord thread.
+Put an oracle's **soul** to work inside **another repo**, in that repo's Discord thread.
 
 ```
-#<oracle>          channel = the soul
-  └─ <repo name>   thread  = the repo
+#repo                 one channel for every repo
+  └─ <owner>/<repo>   thread = the repo, shared by every soul of it
 body: <repo>/wt/<oracle>-soul   (branch soul/<oracle>)
-ears: that thread only          eyes: every room the bot can see
+ears: that thread only, answer only when tagged     eyes: every room the bot can see
 ```
 
 - `SKILL.md`: the Claude Code skill (model, run steps, traps met for real, undo)
 - `soul-in-repo.sh`: the script the skill runs
 
-The script builds the channel (if it is missing), the thread, the worktree, `.discord/access.json`,
+The script finds or creates #repo and the `<owner>/<repo>` thread (reused and unarchived if it exists), then the worktree, `.discord/access.json`,
 `.discord/launch.sh`, its own herdr space and the Laris host row, then posts a hello.
 Tokens come from `pass` at launch and never touch this repo.
 
-Live pairs (2026-11-07): #neo-oracle › nongbua-oracle, oracle-gods-eys-os, esp32-line-beacon (m5) ·
-#calliope-oracle › aiexpo-oracle (white) · #digger-oracle › theognosis (white).
+Layout since 2026-11-07 (Nat): #repo › `<owner>/<repo>`. Bodies built before it still live in the old
+channel = oracle threads: #neo-oracle › nongbua-oracle, oracle-gods-eys-os, esp32-line-beacon, soul-in-repo (m5) ·
+#pulse-oracle › soul-in-repo (m5) · #calliope-oracle › aiexpo-oracle (white) · #digger-oracle › theognosis (white).
+They stay as they are until each is rebuilt; old threads get archived, never deleted.
 
 Install as a skill:
 

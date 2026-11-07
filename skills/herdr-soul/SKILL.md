@@ -1,13 +1,13 @@
 ---
 name: herdr-soul
-description: One skill, five verbs, for putting an oracle's SOUL to work inside ANOTHER repo (channel = soul, thread = repo, body = <repo>/wt/<oracle>-soul on the oracle's own bot). `/herdr-soul list` (who can come in), `ls [repo]` (souls in a repo), `check <oracle> [repo]` (preflight, changes nothing), `in <oracle> [repo]` (bring the soul in), `out <oracle> [repo]` (take it out). Backed by real code: bin/herdr-soul in laris-co/soul-in-repo. Use when Nat says "bring <oracle> in", "soul in repo", "which souls are here", "take neo out of X", "/herdr-soul". The model and every trap are in /soul-in-repo.
+description: One skill, five verbs, for putting an oracle's SOUL to work inside ANOTHER repo (channel #repo, thread <owner>/<repo> shared by its souls, answer only when tagged, body = <repo>/wt/<oracle>-soul on the oracle's own bot). `/herdr-soul list` (who can come in), `ls [repo]` (souls in a repo), `check <oracle> [repo]` (preflight, changes nothing), `in <oracle> [repo]` (bring the soul in), `out <oracle> [repo]` (take it out). Backed by real code: bin/herdr-soul in laris-co/soul-in-repo. Use when Nat says "bring <oracle> in", "soul in repo", "which souls are here", "take neo out of X", "/herdr-soul". The model and every trap are in /soul-in-repo.
 ---
 
 # /herdr-soul — bring a soul into a repo, with a script, not just prose
 
 The work is done by `bin/herdr-soul` (zsh + small python), next to `soul-in-repo.sh` in
 `laris-co/soul-in-repo`. This file only says when to call which verb and what to tell Nat.
-The model (channel = soul, thread = repo, ears narrow, eyes wide) and the traps met for real
+The model (channel #repo, thread owner/repo, ears narrow, eyes wide) and the traps met for real
 are in `/soul-in-repo` — read it once before the first `in`.
 
 ```bash
