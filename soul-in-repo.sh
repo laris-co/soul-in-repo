@@ -77,6 +77,22 @@ except Exception: print("")' $W)
 fi
 MACH=$(sed -n 's/^machine: *\([^ #]*\).*/\1/p' $cfg 2>/dev/null | head -1); HOST=$(hostname -s)
 ML=$HOME/.claude/channels/$oracle/access.local.json
+# Layout 9: the soul's thread is owned by the oracle's bot, and the plugin gives an own thread requireMention false on
+# EVERY body of that bot. A running main body therefore hears the soul's thread too (white Pulse main heard Nat's 'ok?' in
+# the pilot room, 2026-11-07 07:17Z). Warn loudly; Nat decides per run (never a silent default).
+MAINBODY=""
+[[ -n $MACH ]] && MAINBODY="config.yaml machine: $MACH"
+MS=$HOME/.claude/channels/$oracle/status.json
+if [[ -f $MS ]]; then
+  mp=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print("" if d.get("stopped_at") else d.get("pid") or "")' $MS 2>/dev/null || true)
+  [[ -n $mp ]] && kill -0 $mp 2>/dev/null && MAINBODY="${MAINBODY:+$MAINBODY; }live main body here (pid $mp, $MS)"
+fi
+if [[ -n $MAINBODY && $DENYMAIN = 0 ]]; then
+  echo "⚠⚠ WARNING: $oracle has a main body ($MAINBODY) and --deny-main is missing."
+  echo "⚠⚠ Its own-thread rule lets that main body hear thread '$oracle' too: two answers from one bot."
+  echo "⚠⚠ To keep it out, run with --deny-main (Nat decides per run):"
+  echo "     $0 $oracle $repo --deny-main$FL${CHPIN:+ --channel $CHPIN} --dry"
+fi
 if (( DENYMAIN )); then
   if [[ -z $MACH || $MACH = $HOST ]]; then echo "      deny-main: groups[channel '$CHN' id] deny+earsOff in $ML (main body here on $HOST; backup first)"
   else echo "      deny-main: main body lives on $MACH: print the herdr --machine prompt for its agent (no ssh edit)"; fi
