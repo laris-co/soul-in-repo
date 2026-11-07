@@ -67,7 +67,7 @@ if (( MIG )); then
   # per-soul dir ~/.claude/channels/<oracle>-<repo> (calliope-oracle on white, 2026-11-07)
   SD=$W/.discord
   if [[ ! -f $SD/access.json ]]; then
-    lsd=$(sed -n "s/^export DISCORD_STATE_DIR=['\"]\{0,1\}\([^'\"]*\).*/\1/p" $W/.discord/launch.sh 2>/dev/null | head -1)
+    lsd=$(sed -n "s/^export DISCORD_STATE_DIR=['\"]\{0,1\}\([^'\"]*\).*/\1/p" $W/.discord/launch.sh 2>/dev/null | head -1 || true)
     for c in ${lsd/#\~/$HOME} $HOME/.claude/channels/$oracle-$name; do [[ -n $c && -f $c/access.json ]] && { SD=$c; break; }; done
   fi
   [[ -f $SD/access.json ]] || { echo "migrate: no live body for $oracle in $W (no access.json in $W/.discord, in the launch line's DISCORD_STATE_DIR, or in ~/.claude/channels/$oracle-$name)"; echo "  build it instead: $0 $oracle $repo"; exit 1; }
