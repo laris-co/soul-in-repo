@@ -20,6 +20,10 @@
 #                                        per soul (its own bot), body = scratch dir (<soul>/ψ/lab/<idea>). Plan; --yes runs.
 #   herdr-soul convert <idea> --repo=<owner/repo> [--public] [--yes]   idea -> repo: create/get the repo, rename the
 #                                        channel 📦・<owner>∕<repo>, rebuild each soul in <repo>/wt on the SAME thread.
+#   herdr-soul wt    <name> [repo] [--channel=<id>] [--bot=<oracle>] [--yes]   a named worktree <repo>/wt/<name> (branch
+#                                        wt/<name>, reused if there) joined by forward like link; default bot laris-labs-oracle,
+#                                        default channel the repo's layout-9 channel. Last line: RESULT thread= pane= wt=
+#   herdr-soul wt-close <name> [repo] [--bot=<oracle>] [--yes]   unlink it and archive the thread; the worktree stays.
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
 #   herdr-soul ears  <oracle> [repo] [ls]                   threads the soul's body hears (access.json + joined.json)
@@ -37,8 +41,8 @@ LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 EARS_BIN=${HERDR_SOUL_EARS:-$HERE/soul-ears}
-DRY=0; GO=0; YES=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; NAME=""; BPANE=""; WHOLE=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --dir=*|--repo=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+DRY=0; GO=0; YES=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; BOTSET=0; NAME=""; BPANE=""; WHOLE=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle; BOTSET=1;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --dir=*|--repo=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -106,6 +110,10 @@ for t in joined:
     if t not in g: print(t,"-","joined,no-row","in joined.json only")
 PY3
 }
+agent_pane() { herdr agent list 2>/dev/null | python3 -c 'import json,sys
+w=sys.argv[1]
+try: print(next((x["pane_id"] for x in json.load(sys.stdin)["result"]["agents"] if x.get("cwd")==w and x.get("agent")),"-"))
+except Exception: print("-")' $1; }
 soul_dir() {  # the oracle's soul repo: config.yaml soul: ({ghq} expanded), else laris-co/<oracle>
   local s=$(sed -n 's/^soul: *"\{0,1\}\([^"#]*\)"\{0,1\}.*/\1/p' $TEAM/oracles/$1/config.yaml 2>/dev/null | head -1 | sed "s#{ghq}#$GHQ#")
   echo ${s:-$GHQ/github.com/laris-co/$1}
@@ -266,6 +274,35 @@ idea|convert)
   exec zsh $HERE/../soul-idea.sh $VERB ${ARGS[2,-1]} $PASS $y
   ;;
 
+wt|wt-close)
+  # Nat 2026-11-07 23:22 "do now" (via Laris): a named worktree joined to a bot by forward in one step.
+  name=${ARGS[2]:?"name: herdr-soul $VERB <name> [repo] [--channel=<id>] [--bot=<oracle>] [--yes]"}
+  [[ $name =~ '^[A-Za-z0-9][A-Za-z0-9._-]*$' ]] || { echo "name: letters, digits, '.', '_' and '-', not '$name'"; exit 2; }
+  R=$(repo_path ${ARGS[3]:-}); W=$R/wt/$name
+  (( BOTSET )) || BOT=laris-labs-oracle
+  fl=(--bot=$BOT); (( YES && !DRY )) && fl+=--yes
+  if [[ $VERB = wt-close ]]; then
+    [[ -d $W ]] || { echo "no worktree $W"; exit 1; }
+    echo "wt-close: $W stays (worktree and branch wt/$name kept)"
+    exec $0 unlink $W $fl
+  fi
+  [[ -d $R/.git || -f $R/.git ]] || { echo "not a repo: $R"; exit 1; }
+  git -C $R check-ignore -q wt/ || { echo "wt/ is not ignored in $R: echo wt/ >> $R/.gitignore and commit it first"; exit 1; }
+  base=$(git -C $R symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || echo HEAD)
+  if [[ -d $W ]]; then echo "wt: reuse $W (branch $(git -C $W branch --show-current 2>/dev/null))"
+  elif git -C $R show-ref -q --verify refs/heads/wt/$name; then echo "wt: git worktree add $W wt/$name (branch exists)"
+  else echo "wt: git worktree add -b wt/$name $W $base"; fi
+  if (( YES && !DRY )) && [[ ! -d $W ]]; then
+    git -C $R fetch -q origin 2>/dev/null || true
+    if git -C $R show-ref -q --verify refs/heads/wt/$name; then git -C $R worktree add -q $W wt/$name
+    else git -C $R worktree add -q -b wt/$name $W $base; fi
+    echo "  ✓ worktree $W (branch wt/$name)"
+  fi
+  [[ -d $W ]] || export HERDR_SOUL_PLANNED_WT=$R   # dry: link plans for a worktree that is not there yet
+  export HERDR_SOUL_RERUN="herdr-soul wt $name $(repo_full $R)${PASS:+ $PASS} --bot=$BOT --yes"
+  exec $0 link $W $fl --name=${NAME:-$name} $PASS ${BPANE:+--pane=$BPANE}
+  ;;
+
 link|unlink)
   # Nat 2026-11-07 (Discord repo-soul, via Laris): "can this make maw cli?" A manual herdr worktree joins an existing bot
   # body by FORWARD: the bot body's gateway hears the thread and prompts the worktree's agent (plugin forwardToWorktree);
@@ -274,7 +311,7 @@ link|unlink)
   # row falls back to its parent, so every existing thread of the channel that has no row yet gets {deny: true,
   # linkedBy: <wt>} in the same access file; rows that already exist are left alone. unlink drops only what link wrote.
   W=${ARGS[2]:?"worktree: herdr-soul $VERB <wt-path> [--bot=<oracle>] [--whole-channel=<id>] [--yes]"}; W=${W:A}
-  [[ -d $W ]] || { echo "no folder $W"; exit 1; }
+  [[ -d $W || ( -n ${HERDR_SOUL_PLANNED_WT:-} && $VERB = link && $YES = 0 ) ]] || { echo "no folder $W"; exit 1; }
   run=$(( YES && !DRY ))
   SAY=$TEAM/tools/discord-say.sh
   if [[ $BOT = somsri-oracle ]]; then ACC=$GHQ/github.com/laris-co/somsri-oracle/.discord/access.json
@@ -310,17 +347,19 @@ f,k,w=sys.argv[1:]; a=json.load(open(f)); g=a["groups"]
 for x in [x for x,v in g.items() if x==k or v.get("linkedBy")==w]: g.pop(x)
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $existing $W
     echo "  ✓ row $existing and ${#denies} linked deny rows dropped (backup beside $ACC)"
+    echo "RESULT thread=$existing pane=$(agent_pane $W) wt=$W"
     exit 0
   fi
   [[ -z $existing ]] || { echo "already linked: $W -> $existing in $ACC (unlink first)"; exit 1; }
-  git -C $W rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "$W is not a git worktree"; exit 1; }
+  [[ -n ${HERDR_SOUL_PLANNED_WT:-} && ! -d $W ]] || git -C $W rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "$W is not a git worktree"; exit 1; }
   NAME=${NAME:-${W:t}}
   pin=${PASS[(r)--channel=*]:-}; CH=${pin#--channel=}
   [[ -z $WHOLE || $WHOLE = <-> ]] || { echo "--whole-channel=<channel id>, not $WHOLE"; exit 2; }
   [[ -n $WHOLE && -n $CH ]] && { echo "--whole-channel and --channel: pick one"; exit 2; }
   [[ -n $WHOLE ]] && CH=$WHOLE
   if [[ -z $CH ]]; then  # the layout-9 channel of the worktree's repo, from Laris's rows
-    full=$(repo_full $(git -C $W rev-parse --path-format=absolute --git-common-dir | xargs dirname))
+    if [[ -d $W ]]; then full=$(repo_full $(git -C $W rev-parse --path-format=absolute --git-common-dir | xargs dirname))
+    else full=$(repo_full $HERDR_SOUL_PLANNED_WT); fi
     CH=$(python3 -c 'import json,sys
 try: g=json.load(open(sys.argv[1])).get("groups",{})
 except Exception: g={}
@@ -328,7 +367,7 @@ print(next((k for k,v in g.items() if v.get("layout")==9 and v.get("repo")==sys.
     [[ -n $CH ]] || { echo "no layout-9 channel for $full in Laris rows: pass --channel=<id>"; exit 1; }
   fi
   if [[ -z $BPANE ]]; then  # the bot body's pane: the agent whose cwd is the bot's home
-    home=$([[ $BOT = somsri-oracle ]] && echo $GHQ/github.com/laris-co/somsri-oracle || soul_dir $BOT)
+    case $BOT in somsri-oracle) home=$GHQ/github.com/laris-co/somsri-oracle;; laris-labs-oracle) home=$TEAM;; *) home=$(soul_dir $BOT);; esac
     BPANE=$(herdr agent list 2>/dev/null | python3 -c 'import json,sys
 h=sys.argv[1]; a=json.load(sys.stdin)["result"]["agents"]
 print(next((x["pane_id"] for x in a if x.get("cwd")==h and x.get("agent")=="claude"),""))' $home)
@@ -391,7 +430,7 @@ json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $CH $W $ANS $chname $
   echo "       answerCmd: \"$ANS\", allowFrom: [Nat, catbutter]}"
   echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
   echo "  4. test: Nat types a line in the thread; the $BOT body forwards it to that pane, which answers with answerCmd"
-  (( run )) || { echo "plan only. To run (Nat's go): herdr-soul link $W --bot=$BOT${pin:+ $pin}${NAME:+ --name=$NAME} --yes"; exit 0; }
+  (( run )) || { echo "plan only. To run (Nat's go): ${HERDR_SOUL_RERUN:-herdr-soul link $W --bot=$BOT${pin:+ $pin}${NAME:+ --name=$NAME} --yes}"; exit 0; }
   mid=$(BOT=$BOT $SAY $CH "🔗 $NAME: worktree ${W/#$HOME/~} joins through $BOT (forward, no second gateway)" | sed -n 's/^sent (id: \([0-9]*\))$/\1/p')
   [[ -n $mid ]] || { echo "stop: could not post in $CH as $BOT"; exit 1; }
   TH=$(BOT=$BOT $SAY --thread $CH $mid "$NAME" | sed -n 's/^thread (id: \([0-9]*\))$/\1/p')
@@ -416,6 +455,7 @@ print(next((x["pane_id"] for x in a if x.get("cwd")==w and x.get("agent")),""))'
   fi
   echo "test: type one line in $TH as Nat; expect a prompt in $NP and an answer signed by $BOT"
   echo "      check the row: python3 -m json.tool $ACC | rg -A3 $TH"
+  echo "RESULT thread=$TH pane=$NP wt=$W"
   ;;
 
 out)
