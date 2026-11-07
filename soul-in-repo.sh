@@ -63,15 +63,23 @@ echo "      Laris row: the CHANNEL '$CHN', requireMention false (hears every lin
 S=${HERDR_SESSION:-laris-co}
 OLD=""; P=""
 if (( MIG )); then
-  [[ -f $W/.discord/access.json ]] || { echo "migrate: no live body at $W (no .discord/access.json)"; echo "  build it instead: $0 $oracle $repo"; exit 1; }
-  OLD=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),""))' $W/.discord/access.json)
+  # the live body's state dir: <wt>/.discord, or the DISCORD_STATE_DIR its launch line exports, or the older
+  # per-soul dir ~/.claude/channels/<oracle>-<repo> (calliope-oracle on white, 2026-11-07)
+  SD=$W/.discord
+  if [[ ! -f $SD/access.json ]]; then
+    lsd=$(sed -n "s/^export DISCORD_STATE_DIR=['\"]\{0,1\}\([^'\"]*\).*/\1/p" $W/.discord/launch.sh 2>/dev/null | head -1)
+    for c in ${lsd/#\~/$HOME} $HOME/.claude/channels/$oracle-$name; do [[ -n $c && -f $c/access.json ]] && { SD=$c; break; }; done
+  fi
+  [[ -f $SD/access.json ]] || { echo "migrate: no live body for $oracle in $W (no access.json in $W/.discord, in the launch line's DISCORD_STATE_DIR, or in ~/.claude/channels/$oracle-$name)"; echo "  build it instead: $0 $oracle $repo"; exit 1; }
+  [[ $SD = $W/.discord ]] || echo "migrate: state dir is $SD (kept: access.json is rewritten there, launch.sh points at it)"
+  OLD=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),""))' $SD/access.json)
   # the pane that runs this body now (herdr pane list, matched on cwd)
   P=$(herdr --session $S pane list 2>/dev/null | python3 -c 'import json,sys
 w=sys.argv[1]
 try: print(next((p["pane_id"] for p in json.load(sys.stdin)["result"]["panes"] if (p.get("foreground_cwd") or p.get("cwd"))==w),""))
 except Exception: print("")' $W)
   echo "migrate: old thread ${OLD:-none} -> '$CHN' › '$oracle' · live pane ${P:-not found}"
-  echo "      rewrite (backup .bak-<ts>-migrate beside each): $W/.discord/access.json, $W/.discord/launch.sh, $NOTE"
+  echo "      rewrite (backup .bak-<ts>-migrate beside each): $SD/access.json, $W/.discord/launch.sh, $NOTE"
   echo "      Laris: old row ${OLD:-none} kept: $oracle leaves its souls[]; when none is left, note 'moved to layout 9', requireMention true"
   echo "      skip: worktree, trust, herdr pane, launch, hello"
 fi
@@ -166,13 +174,14 @@ for u in $NAT $CB; do sapi -o /dev/null -w "add human $u %{http_code}\n" -X PUT 
 # 3. worktree + backups of what a migrate rewrites (Nothing is Deleted)
 if (( MIG )); then
   ts=$(date +%Y%m%d-%H%M%S)
-  for f in $W/.discord/access.json $W/.discord/launch.sh $NOTE; do [[ -f $f ]] && cp -p $f $f.bak-$ts-migrate; done
+  for f in $SD/access.json $W/.discord/launch.sh $NOTE; do [[ -f $f ]] && cp -p $f $f.bak-$ts-migrate; done
 else
   git -C $R fetch -q origin main 2>/dev/null || true
   [[ -d $W ]] || git -C $R worktree add -q -b soul/$oracle $W origin/main 2>/dev/null || git -C $R worktree add -q $W soul/$oracle
 fi
-mkdir -p $W/.discord
-cat > $W/.discord/access.json <<J
+SD=${SD:-$W/.discord}
+mkdir -p $W/.discord $SD
+cat > $SD/access.json <<J
 { "dmPolicy": "allowlist", "allowFrom": [], "pending": {},
   "groups": { "$TH": { "requireMention": false, "allowFrom": ["$NAT", "$CB"],
     "note": "own thread '$oracle' in channel '$CHN' (layout 9): hears every line" } },
@@ -197,13 +206,14 @@ Your soul ($soul/CLAUDE.md) is appended at start. The repo's own files are the p
 - Every report starts with where you are: machine · pane · path (branch).
 MD
 }
-ex=$(git -C $R rev-parse --git-common-dir)/info/exclude
+# absolute: in a worktree --git-common-dir is relative to the cwd, not to -C (digger-oracle theognosis on white)
+ex=$(git -C $R rev-parse --path-format=absolute --git-common-dir)/info/exclude
 note_text > $W/CLAUDE.local.md
 for l in .discord/ CLAUDE.local.md 'CLAUDE.local.md.bak-*'; do grep -qxF $l $ex 2>/dev/null || echo $l >> $ex; done
 cat > $W/.discord/launch.sh <<L
 #!/bin/zsh
 cd '$W'
-export DISCORD_STATE_DIR='$W/.discord'
+export DISCORD_STATE_DIR='$SD'
 export DISCORD_ORACLE=$oracle
 export DISCORD_BOT_TOKEN="\$(pass show discord/$oracle-token | head -1)"
 export CLAUDE_CODE_OAUTH_TOKEN="\$(pass show claude/token-$ctok | head -1)"
@@ -283,4 +293,4 @@ if (( MIG )); then
   exit 0
 fi
 echo "done: '$CHN' ($CH) › '$oracle' ($TH) · $W · pane $P"
-echo "next: wait for $W/.discord/status.json gateway.ready, then: herdr agent prompt $P 'Read CLAUDE.local.md, post one hello in thread $TH'"
+echo "next: wait for ${SD:-$W/.discord}/status.json gateway.ready, then: herdr agent prompt $P 'Read CLAUDE.local.md, post one hello in thread $TH'"
