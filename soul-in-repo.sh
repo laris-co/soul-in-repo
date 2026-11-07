@@ -21,7 +21,7 @@
 # Runs on the machine of the Laris host bot (m5 today). Tokens only from pass, never printed.
 set -euo pipefail
 oracle=${1:?oracle}; repo=${2:?repo}; shift 2
-CAT=${SOUL_CATEGORY:-1560847801838215259}   # 🔬・research category
+CAT=${SOUL_CATEGORY:-1568651567144374314}   # 📦 repos category (Nat 2026-11-07 'organize'; was 🔬・research 1560847801838215259)
 CHNAME=${CHNAME:-slash}
 PREFIX=${SOUL_CHPREFIX-📦・}   # icon prefix for a NEW channel (Nat's pilot room); SOUL_CHPREFIX= for none
 CHPIN=""
@@ -67,7 +67,7 @@ if (( MIG )); then
   # per-soul dir ~/.claude/channels/<oracle>-<repo> (calliope-oracle on white, 2026-11-07)
   SD=$W/.discord
   if [[ ! -f $SD/access.json ]]; then
-    lsd=$(sed -n "s/^export DISCORD_STATE_DIR=['\"]\{0,1\}\([^'\"]*\).*/\1/p" $W/.discord/launch.sh 2>/dev/null | head -1)
+    lsd=$(sed -n "s/^export DISCORD_STATE_DIR=['\"]\{0,1\}\([^'\"]*\).*/\1/p" $W/.discord/launch.sh 2>/dev/null | head -1 || true)
     for c in ${lsd/#\~/$HOME} $HOME/.claude/channels/$oracle-$name; do [[ -n $c && -f $c/access.json ]] && { SD=$c; break; }; done
   fi
   [[ -f $SD/access.json ]] || { echo "migrate: no live body for $oracle in $W (no access.json in $W/.discord, in the launch line's DISCORD_STATE_DIR, or in ~/.claude/channels/$oracle-$name)"; echo "  build it instead: $0 $oracle $repo"; exit 1; }
@@ -79,6 +79,7 @@ w=sys.argv[1]
 try: print(next((p["pane_id"] for p in json.load(sys.stdin)["result"]["panes"] if (p.get("foreground_cwd") or p.get("cwd"))==w),""))
 except Exception: print("")' $W)
   echo "migrate: old thread ${OLD:-none} -> '$CHN' › '$oracle' · live pane ${P:-not found}"
+  echo "      keeps every other row of access.json (office joins etc.); drops only the old own thread ${OLD:-none}"
   echo "      rewrite (backup .bak-<ts>-migrate beside each): $SD/access.json, $W/.discord/launch.sh, $NOTE"
   echo "      Laris: old row ${OLD:-none} kept: $oracle leaves its souls[]; when none is left, note 'moved to layout 9', requireMention true"
   echo "      skip: worktree, trust, herdr pane, launch, hello"
@@ -188,6 +189,26 @@ cat > $SD/access.json <<J
   "guilds": { "$GUILD": { "requireMention": true, "allowFrom": ["eyes-only"],
     "note": "auto read allowlist: fetch any room in the guild; allowFrom matches no one, so nothing outside the thread is heard" } } }
 J
+# migrate keeps every row the live body had except its old own thread (office joins, rows Somsri or Nat added;
+# Laris 2026-11-07: pulse-oracle lost its office row 1568526565242044558). The new thread row and guild row win.
+if (( MIG )) && [[ -f $SD/access.json.bak-$ts-migrate ]]; then
+  python3 - $SD/access.json.bak-$ts-migrate $SD/access.json "${OLD:-}" $TH <<'PY'
+import json, sys
+old_f, new_f, old_th, th = sys.argv[1:]
+o = json.load(open(old_f)); n = json.load(open(new_f))
+kept = []
+for k, v in o.get("groups", {}).items():
+    if k == th or k in n["groups"]: continue
+    if k == old_th and not v.get("note", "").startswith("office"): continue   # the old own thread goes
+    n["groups"][k] = v; kept.append(k)
+for k, v in o.get("guilds", {}).items():
+    n["guilds"].setdefault(k, v)
+for k, v in o.items():
+    if k not in n: n[k] = v
+json.dump(n, open(new_f, "w"), indent=2, ensure_ascii=False)
+print("migrate: kept %d other row(s) from the old access.json%s" % (len(kept), (": " + ", ".join(kept)) if kept else ""))
+PY
+fi
 BODY="the repo $full (worktree $W, branch soul/$oracle)"
 note_text() { cat <<MD
 # $oracle in $full (written by soul-in-repo.sh, layout 9: channel '$CHN', thread '$oracle')

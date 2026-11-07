@@ -242,7 +242,7 @@ room)
     o=${o%-oracle}-oracle; W=$R/wt/$o-soul
     # a live body keeps its state in <wt>/.discord, in its launch line's DISCORD_STATE_DIR, or in
     # ~/.claude/channels/<oracle>-<repo> (same detection as soul-in-repo.sh --migrate)
-    lsd=$(sed -n "s/^export DISCORD_STATE_DIR=['\"]\{0,1\}\([^'\"]*\).*/\1/p" $W/.discord/launch.sh 2>/dev/null | head -1)
+    lsd=$(sed -n "s/^export DISCORD_STATE_DIR=['\"]\{0,1\}\([^'\"]*\).*/\1/p" $W/.discord/launch.sh 2>/dev/null | head -1 || true)
     if [[ -f $W/.discord/access.json || ( -n $lsd && -f ${lsd/#\~/$HOME}/access.json ) || -f $HOME/.claude/channels/$o-${R:t}/access.json ]] && [[ -d $W ]]
     then mode=migrate; fl=(--migrate); else mode=in; fl=(); fi
     echo; echo "── $o: $mode (--deny-main${pin:+ $pin})"
