@@ -319,7 +319,7 @@ PYT
     echo "  2. threads of the channel (they fall back to the channel row unless they have their own):"
     print -r -- $threads | awk '$1=="DENY"{$1="";print "       deny  "$0" -> {deny: true, linkedBy: wt}"} $1=="KEEP"{$1="";print "       keep  "$0" (already has a row)"}'
     (( ${#deny} )) || echo "       (none to deny)"
-    echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR"
+    echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
     echo "  4. test: Nat types a line in #$chname; the $BOT body forwards it to that pane, which answers with answerCmd"
     echo "     a thread opened later has no row and also forwards: deny it by hand if it is not for $W"
     (( run )) || { echo "plan only. To run (Nat's go): herdr-soul link $W --bot=$BOT --whole-channel=$CH --yes"; exit 0; }
@@ -338,7 +338,7 @@ json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $CH $W $ANS $chname $
   echo "  1. as $BOT: post '🔗 $NAME' in channel $CH, open thread '$NAME' on it ($SAY --thread)"
   echo "  2. back up $ACC, add groups[<thread>] = {requireMention: false, forwardTo: $W,"
   echo "       answerCmd: \"$ANS\", allowFrom: [Nat, catbutter]}"
-  echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR"
+  echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
   echo "  4. test: Nat types a line in the thread; the $BOT body forwards it to that pane, which answers with answerCmd"
   (( run )) || { echo "plan only. To run (Nat's go): herdr-soul link $W --bot=$BOT${pin:+ $pin}${NAME:+ --name=$NAME} --yes"; exit 0; }
   mid=$(BOT=$BOT $SAY $CH "🔗 $NAME: worktree ${W/#$HOME/~} joins through $BOT (forward, no second gateway)" | sed -n 's/^sent (id: \([0-9]*\))$/\1/p')
@@ -353,9 +353,16 @@ f,th,w,ans,n=sys.argv[1:]; a=json.load(open(f)); a.setdefault("groups",{})[th]={
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $TH $W $ANS $NAME
   echo "  ✓ row $TH in $ACC (backup beside it)"
   fi
-  NP=$(herdr pane split $BPANE --direction down | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
-  herdr pane run $NP "cd ${(q)W} && env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR claude --dangerously-skip-permissions" >/dev/null
-  echo "  ✓ claude starting in $NP ($W)"
+  # an agent already living in the worktree is reused: a second one there would make the forward target ambiguous
+  NP=$(herdr agent list 2>/dev/null | python3 -c 'import json,sys
+w=sys.argv[1]; a=json.load(sys.stdin)["result"]["agents"]
+print(next((x["pane_id"] for x in a if x.get("cwd")==w and x.get("agent")),""))' $W)
+  if [[ -n $NP ]]; then echo "  ✓ agent already in $W ($NP): reused, no new pane"
+  else
+    NP=$(herdr pane split $BPANE --direction down | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
+    herdr pane run $NP "cd ${(q)W} && env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR claude --dangerously-skip-permissions" >/dev/null
+    echo "  ✓ claude starting in $NP ($W)"
+  fi
   echo "test: type one line in $TH as Nat; expect a prompt in $NP and an answer signed by $BOT"
   echo "      check the row: python3 -m json.tool $ACC | rg -A3 $TH"
   ;;
