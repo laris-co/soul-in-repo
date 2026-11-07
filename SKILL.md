@@ -44,10 +44,13 @@ Move a LIVE body (built before 2026-11-07) to #repo › owner/repo: `$S <oracle>
 without `--dry`. It rewrites access.json, launch.sh, CLAUDE.local.md (backups `.bak-<ts>-migrate`) and the Laris rows
 (new thread added; old thread row kept with note "moved to #repo", requireMention true). It never opens a pane or
 starts claude: re-running the plain script on a live body starts a second claude on the same bot token (rival gateway).
-`--deny-main` (only after Nat's go) also writes `{ deny: true }` for the #repo channel into the oracle's MAIN body
+`--deny-main` (only after Nat's go) also writes `{ deny: true, earsOff: true }` for the #repo channel into the oracle's MAIN body
 `~/.claude/channels/<oracle>/access.local.json`, so a main body sharing the bot never hears or joins #repo threads
 (Pulse's main body on white, w47:p1, joined #repo › laris-co/soul-in-repo that way, 2026-11-07). If the main body
 lives on another machine (config.yaml `machine:`), the script prints the `herdr --machine` prompt for that box's agent.
+`earsOff` is what makes it hold: the plugin checks `earsOff` on the room and on a thread's parent BEFORE the roll call
+and the joined-thread pass; a plain `deny` is only seen later in findGroupPolicy, so a joined main body or a role roll
+call still got through. Side effect: a trusted `!ears on` in #repo would lift it (it lifts only denies marked earsOff).
 
 Restart steps (the live claude still runs the old files until it restarts):
 

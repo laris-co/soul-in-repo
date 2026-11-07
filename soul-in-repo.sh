@@ -3,7 +3,7 @@
 #   --migrate  move a LIVE body to #repo › <owner>/<repo>: rewrite its access.json, CLAUDE.local.md, launch.sh
 #              (backups beside them) and the Laris rows; NO worktree, trust, pane or launch (a second claude on
 #              the same bot token = rival gateway). Prints the restart line for the existing pane.
-#   --deny-main  (pending Nat's go) also write { deny: true } for the #repo channel into the oracle's MAIN body
+#   --deny-main  (pending Nat's go) also write { deny: true, earsOff: true } for the #repo channel into the oracle's MAIN body
 #              access.local.json, so a main body sharing the bot never hears or joins #repo threads (Pulse's main
 #              body on white joined #repo › laris-co/soul-in-repo, 2026-11-07). Local machine: written here (backup);
 #              main body on another machine: prints the herdr --machine prompt for that box's agent, never ssh.
@@ -61,7 +61,7 @@ fi
 MACH=$(sed -n 's/^machine: *\([^ #]*\).*/\1/p' $cfg 2>/dev/null | head -1); HOST=$(hostname -s)
 ML=$HOME/.claude/channels/$oracle/access.local.json
 if (( DENYMAIN )); then
-  if [[ -z $MACH || $MACH = $HOST ]]; then echo "      deny-main: groups[#$CHN id] deny:true in $ML (main body here on $HOST; backup first)"
+  if [[ -z $MACH || $MACH = $HOST ]]; then echo "      deny-main: groups[#$CHN id] deny+earsOff in $ML (main body here on $HOST; backup first)"
   else echo "      deny-main: main body lives on $MACH: print the herdr --machine prompt for its agent (no ssh edit)"; fi
 fi
 (( DRY )) && { echo "dry: nothing touched"; exit 0; }
@@ -178,7 +178,7 @@ json.dump(a, open(f, "w"), indent=2)
 PY
 # 7. (--deny-main) the oracle's MAIN body must never hear or join #repo threads (same bot, own access files)
 if (( DENYMAIN )); then
-  DROW="{\"deny\": true, \"note\": \"#$CHN threads belong to soul bodies (soul-in-repo --deny-main); main body stays out\"}"
+  DROW="{\"deny\": true, \"earsOff\": true, \"note\": \"#$CHN threads belong to soul bodies (soul-in-repo --deny-main); main body stays out\"}"
   if [[ -z $MACH || $MACH = $HOST ]]; then
     if [[ -d ${ML:h} ]]; then
       [[ -f $ML ]] && cp $ML $ML.bak-$(date +%Y%m%d-%H%M%S)-deny-repo || echo '{}' > $ML
@@ -186,7 +186,7 @@ if (( DENYMAIN )); then
 import json, sys
 f, ch = sys.argv[1:]; a = json.load(open(f))
 row = a.setdefault("groups", {}).setdefault(ch, {})
-row.update(deny=True); row.setdefault("note", "#repo threads belong to soul bodies (soul-in-repo --deny-main); main body stays out")
+row.update(deny=True, earsOff=True); row.setdefault("note", "#repo threads belong to soul bodies (soul-in-repo --deny-main); main body stays out")
 json.dump(a, open(f, "w"), indent=2)
 PY
       echo "deny-main: #$CHN ($CH) denied in $ML (restart or wait for the main body's access reload)"
