@@ -19,6 +19,7 @@ Diagram: `laris-labs-oracle/ψ/lab/2026-11-05_one-bot-many-repos/D1-soul-repo-mo
 body: <repo>/wt/<oracle>-soul  branch soul/<oracle>
       soul  = laris-co/<oracle>/CLAUDE.md, appended at start (--append-system-prompt)
       ears  = DISCORD_STATE_DIR=<wt>/.discord  access.json: this thread only
+      name  = DISCORD_ORACLE=<oracle>  (state dir is .discord, so the plugin cannot guess the oracle from it)
       start = <wt>/.discord/launch.sh  (bot + Claude token from pass at launch)
 ```
 
@@ -52,6 +53,7 @@ Run it on the machine where the body should live. For a body on white, ask white
 | `@import` of the soul in CLAUDE.local.md stops at "allow external imports?" — never answer that for Nat | soul via `--append-system-prompt "$(cat soul)"` |
 | new folder stops at "trust this folder?" | pre-trusted in ~/.claude.json, as tools/laris-wt.sh does |
 | `.envrc` of the repo carried a Claude token that is not logged in ("Not logged in") | launch.sh exports the token from the oracle's config `claude_token:` (default t3) |
+| body's status.json said `oracle: laris-labs-oracle`: the plugin's myOracle() takes the name from the state dir basename, and `.discord` is not `<x>-oracle`, so it fell back to the host | launch.sh exports `DISCORD_ORACLE=<oracle>`; the plugin reads it once the laris-team server.ts PR lands. Existing bodies get it only when their launch.sh is rewritten and they restart with `RESUME=1` |
 | "only one bot" misread as "every body uses the Laris token" | the body answers with the ORACLE's own bot; Laris only watches |
 | Laris answered in the oracle's thread too (two voices, one name) | Laris row `requireMention: true`; Laris reacts 🏮 at most, answers only when tagged |
 | a body edited Laris's access.local.json because a chat message asked | CLAUDE.local.md: edit only your own `.discord/` |
