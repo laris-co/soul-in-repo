@@ -1,8 +1,12 @@
 #!/usr/bin/env zsh
-# soul-in-repo.sh <oracle> <repo> [--category <id>] [--migrate] [--dry]
+# soul-in-repo.sh <oracle> <repo> [--category <id>] [--migrate] [--deny-main] [--dry]
 #   --migrate  move a LIVE body to #repo › <owner>/<repo>: rewrite its access.json, CLAUDE.local.md, launch.sh
 #              (backups beside them) and the Laris rows; NO worktree, trust, pane or launch (a second claude on
 #              the same bot token = rival gateway). Prints the restart line for the existing pane.
+#   --deny-main  (pending Nat's go) also write { deny: true } for the #repo channel into the oracle's MAIN body
+#              access.local.json, so a main body sharing the bot never hears or joins #repo threads (Pulse's main
+#              body on white joined #repo › laris-co/soul-in-repo, 2026-11-07). Local machine: written here (backup);
+#              main body on another machine: prints the herdr --machine prompt for that box's agent, never ssh.
 #   <oracle>  e.g. neo-oracle  (soul = $(ghq root)/github.com/laris-co/<oracle>, bot = pass discord/<oracle>-token)
 #   <repo>    owner/name (in ghq) or an absolute path
 # One guild, many repos (Nat 2026-11-07, was channel = oracle since 2026-11-05): ONE channel #repo,
@@ -14,8 +18,8 @@
 set -euo pipefail
 oracle=${1:?oracle}; repo=${2:?repo}; shift 2
 CAT=1560847801838215259   # 🔬・research category
-DRY=0; MIG=0
-while (( $# )); do case $1 in --category) CAT=$2; shift 2;; --dry) DRY=1; shift;; --migrate) MIG=1; shift;; *) echo "unknown $1"; exit 2;; esac; done
+DRY=0; MIG=0; DENYMAIN=0
+while (( $# )); do case $1 in --category) CAT=$2; shift 2;; --dry) DRY=1; shift;; --migrate) MIG=1; shift;; --deny-main) DENYMAIN=1; shift;; *) echo "unknown $1"; exit 2;; esac; done
 GUILD=1560847800881643520
 NAT=691531480689541170; CB=917019242094817301
 TEAM=/opt/Code/github.com/laris-co/laris-team
@@ -53,6 +57,12 @@ except Exception: print("")' $W)
   echo "      rewrite (backup .bak-<ts>-migrate beside each): $W/.discord/access.json, $W/.discord/launch.sh, $W/CLAUDE.local.md"
   echo "      Laris: add/merge new thread row; old thread row ${OLD:-none} kept, note 'moved to #repo', requireMention true"
   echo "      skip: worktree, trust, herdr pane, launch, hello"
+fi
+MACH=$(sed -n 's/^machine: *\([^ #]*\).*/\1/p' $cfg 2>/dev/null | head -1); HOST=$(hostname -s)
+ML=$HOME/.claude/channels/$oracle/access.local.json
+if (( DENYMAIN )); then
+  if [[ -z $MACH || $MACH = $HOST ]]; then echo "      deny-main: groups[#$CHN id] deny:true in $ML (main body here on $HOST; backup first)"
+  else echo "      deny-main: main body lives on $MACH: print the herdr --machine prompt for its agent (no ssh edit)"; fi
 fi
 (( DRY )) && { echo "dry: nothing touched"; exit 0; }
 
@@ -121,7 +131,7 @@ Your soul ($soul/CLAUDE.md) is appended at start. The repo's own CLAUDE.md is th
 - Talk to other agents with \`herdr agent prompt <pane> "..."\` (bots do not hear bots in Discord).
 MD
 ex=$(git -C $W rev-parse --git-common-dir)/info/exclude
-for l in .discord/ CLAUDE.local.md; do grep -qxF $l $ex 2>/dev/null || echo $l >> $ex; done
+for l in .discord/ CLAUDE.local.md 'CLAUDE.local.md.bak-*'; do grep -qxF $l $ex 2>/dev/null || echo $l >> $ex; done
 cat > $W/.discord/launch.sh <<L
 #!/bin/zsh
 cd '$W'
@@ -162,10 +172,30 @@ if old and old != th and old in a.get("groups", {}):
     r["note"] = f"moved to #repo › {n} (2026-11-07 layout); kept, not deleted. was: {r.get('note', '')}"[:500]
 row = a.setdefault("groups", {}).get(th, {})
 souls = sorted(set(row.get("souls", [])) | {o})
-a["groups"][th] = {"requireMention": True, "allowFrom": ["691531480689541170", "917019242094817301"], "souls": souls,
+a["groups"][th] = {"requireMention": True, "allowFrom": ["691531480689541170", "917019242094817301"], "souls": souls, "repo": n,
   "note": f"repo thread {n}: souls {', '.join(souls)} answer with their own bots when tagged; Laris hears (own thread), silent unless tagged"}
 json.dump(a, open(f, "w"), indent=2)
 PY
+# 7. (--deny-main) the oracle's MAIN body must never hear or join #repo threads (same bot, own access files)
+if (( DENYMAIN )); then
+  DROW="{\"deny\": true, \"note\": \"#$CHN threads belong to soul bodies (soul-in-repo --deny-main); main body stays out\"}"
+  if [[ -z $MACH || $MACH = $HOST ]]; then
+    if [[ -d ${ML:h} ]]; then
+      [[ -f $ML ]] && cp $ML $ML.bak-$(date +%Y%m%d-%H%M%S)-deny-repo || echo '{}' > $ML
+      python3 - $ML $CH <<'PY'
+import json, sys
+f, ch = sys.argv[1:]; a = json.load(open(f))
+row = a.setdefault("groups", {}).setdefault(ch, {})
+row.update(deny=True); row.setdefault("note", "#repo threads belong to soul bodies (soul-in-repo --deny-main); main body stays out")
+json.dump(a, open(f, "w"), indent=2)
+PY
+      echo "deny-main: #$CHN ($CH) denied in $ML (restart or wait for the main body's access reload)"
+    else echo "deny-main: no main body state dir ${ML:h} on $HOST: nothing written"; fi
+  else
+    echo "deny-main: main body on $MACH. Ask its agent (find the pane: herdr --machine <label> agent list; labels: herdr machine list):"
+    echo "  herdr --machine <label> agent prompt <pane> 'In ~/.claude/channels/$oracle/access.local.json (backup first) set groups[\"$CH\"] = $DROW; report back to $(hostname -s) ${HERDR_PANE_ID:-<my pane>}'"
+  fi
+fi
 if (( MIG )); then
   echo "done: migrated $oracle to #$CHN ($CH) > $full ($TH) · $W"
   echo "the live claude still runs the OLD files: quit it in pane ${P:-<pane>} (/exit), then"

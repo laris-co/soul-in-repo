@@ -4,7 +4,10 @@
 #   herdr-soul ls    [repo]              souls living in a repo: worktree, thread, pane, gateway ready?
 #   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
 #   herdr-soul in    <oracle> [repo]     check, then soul-in-repo.sh (channel, thread, worktree, space, Laris row, hello)
-#   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes the pane, removes the Laris row, archives the thread
+#   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
+#                                        archives the thread only when no soul is left
+# Laris rows (2026-11-07 layout): one row per #repo thread, souls[] = who lives there. Old rows ('<oracle> soul in
+# <repo>') still count until the body is migrated; rows whose note starts 'moved to #repo' are history, never live.
 # [repo] = owner/name, an absolute path, or empty = the git repo of the current directory.
 # Every verb accepts --dry. Tokens come from pass and are never printed.
 set -euo pipefail
@@ -25,6 +28,27 @@ repo_path() {  # $1 = owner/name | abs path | empty
 }
 cfg() { sed -n "s/^$2: *\\([^ #]*\\).*/\\1/p" $TEAM/oracles/$1/config.yaml 2>/dev/null | head -1; }
 has_pass() { pass show "$1" >/dev/null 2>&1; }
+repo_full() {  # $1 = repo path -> <owner>/<repo> (origin, else the ghq path), same rule as soul-in-repo.sh
+  local f=$(git -C $1 remote get-url origin 2>/dev/null | sed -E 's#^(git@[^:]+:|[a-z+]+://[^/]+/)##; s#\.git$##')
+  [[ $f = */* ]] || f=${1#$GHQ/github.com/}
+  echo $f
+}
+rows() {  # Laris soul rows, one line per soul: <thread> <layout new|old> <oracle> <repo>   (history rows skipped)
+  python3 - "$LARIS" <<'PY'
+import json,re,sys
+try: g=json.load(open(sys.argv[1])).get("groups",{})
+except Exception: g={}
+for th,v in g.items():
+    note=v.get("note","")
+    if note.startswith("moved to #repo"): continue
+    if "souls" in v:
+        m=re.match(r"repo thread (\S+?):",note); repo=v.get("repo") or (m.group(1) if m else "?")
+        for o in v["souls"]: print(th,"new",o,repo)
+        continue
+    m=re.match(r"(\S+?)(?:-oracle)? soul in (\S+)",note)
+    if m: print(th,"old",m.group(1).lower().removesuffix("-oracle")+"-oracle",m.group(2))
+PY
+}
 soul_dir() {  # the oracle's soul repo: config.yaml soul: ({ghq} expanded), else laris-co/<oracle>
   local s=$(sed -n 's/^soul: *"\{0,1\}\([^"#]*\)"\{0,1\}.*/\1/p' $TEAM/oracles/$1/config.yaml 2>/dev/null | head -1 | sed "s#{ghq}#$GHQ#")
   echo ${s:-$GHQ/github.com/laris-co/$1}
@@ -33,16 +57,7 @@ soul_dir() {  # the oracle's soul repo: config.yaml soul: ({ghq} expanded), else
 case $VERB in
 list)
   printf "%-32s %-5s %-6s %-7s %-8s %s\n" ORACLE SOUL TOKEN CLAUDE MACHINE "ALREADY IN (Laris rows)"
-  python3 - "$LARIS" > /tmp/herdr-soul-where.$$ <<'PY'
-import json,re,sys
-try: g=json.load(open(sys.argv[1])).get("groups",{})
-except Exception: g={}
-w={}
-for th,v in g.items():
-    m=re.match(r"(\S+?)(?:-oracle)? soul in (\S+)",v.get("note",""))
-    if m: w.setdefault(m.group(1).lower(),[]).append(m.group(2))
-for k,v in w.items(): print(k, ",".join(v))
-PY
+  where_all=$(rows)
   for d in $TEAM/oracles/*-oracle(/); do
     o=${d:t}; short=${o%-oracle}
     [[ $(cfg $o retired) = true ]] && continue
@@ -50,14 +65,14 @@ PY
     tok=$(has_pass discord/$o-token && echo ✓ || echo ✗)
     ct=$(cfg $o claude_token); ct=${ct:-t3}
     m=$(cfg $o machine); m=${m:--}
-    where=$(awk -v k=$short '$1==k{print $2}' /tmp/herdr-soul-where.$$)
+    where=$(print -r -- $where_all | awk -v k=$o '$3==k{printf "%s%s%s", sep, $4, ($2=="old"?" (old layout)":""); sep=", "}')
     printf "%-32s %-5s %-6s %-7s %-8s %s\n" $o $soul $tok $ct $m "${where:--}"
   done
-  rm -f /tmp/herdr-soul-where.$$
   ;;
 
 ls)
-  R=$(repo_path ${ARGS[2]:-}); echo "repo: $R"
+  R=$(repo_path ${ARGS[2]:-}); full=$(repo_full $R); echo "repo: $R ($full)"
+  where_all=$(rows)
   found=0
   git -C $R worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r W; do
     [[ $W = */wt/*-soul ]] || continue; found=1
@@ -70,8 +85,10 @@ try:
   ps=json.load(sys.stdin)["result"]["panes"]
   print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),"-"))
 except Exception: print("-")' $W)
-    echo "  $o  thread $th  pane $pane  gateway $ready  ($W)"
+    lay=$(print -r -- $where_all | awk -v t=$th -v o=$o '$1==t && $3==o{print $2}' | head -1)
+    echo "  $o  thread $th${lay:+ ($lay layout)}  pane $pane  gateway $ready  ($W)"
   done
+  print -r -- $where_all | awk -v r=$full '$2=="new" && $4==r{t=$1; s=s (s?", ":"") $3} END{if(t) print "  Laris: #repo › " r " (" t ") souls: " s; else print "  Laris: no #repo thread for " r " yet"}'
   ;;
 
 check)
@@ -89,13 +106,15 @@ check)
     W=$R/wt/$o-soul
     [[ -d $W ]] && echo "  • worktree already there: $W (in will reuse it)" || ok "no worktree yet"
   fi
-  name=${R:t}
-  if python3 -c 'import json,re,sys
-g=json.load(open(sys.argv[1])).get("groups",{})
-o=sys.argv[2].replace("-oracle",""); n=sys.argv[3]
-sys.exit(0 if any(re.match(rf"{re.escape(o)}(-oracle)? soul in {re.escape(n)}\b", v.get("note","")) for v in g.values()) else 1)' $LARIS $o $name 2>/dev/null; then
-    echo "  • Laris already has a row for $o in $name: the thread exists (in would make a second one)"; fail=1
-  else ok "no thread yet for $o in $name"; fi
+  name=${R:t}; full=$(repo_full $R); where_all=$(rows)
+  newth=$(print -r -- $where_all | awk -v r=$full '$2=="new" && $4==r{print $1; exit}')
+  if print -r -- $where_all | awk -v r=$full -v o=$o '$2=="new" && $4==r && $3==o{f=1} END{exit !f}'; then
+    bad "$o is already a soul of #repo › $full ($newth)" "nothing to do; to rebuild its body: zsh $SCRIPT $o $full --migrate --dry"
+  elif print -r -- $where_all | awk -v r=$name -v o=$o '$2=="old" && $4==r && $3==o{f=1} END{exit !f}'; then
+    bad "$o still lives in its old-layout thread for $name" "zsh $SCRIPT $o $full --migrate --dry"
+  elif [[ -n $newth ]]; then
+    echo "  • thread exists: reuse (#repo › $full, $newth)"
+  else ok "no #repo thread for $full yet (in will open it)"; fi
   m=$(cfg $o machine)
   [[ -n $m ]] && echo "  • main body lives on $m: a new thread is in no other access file, so no double answers"
   (( fail )) && { echo "result: NOT ready"; exit 1; } || echo "result: ready"
@@ -115,16 +134,41 @@ out)
   pane=$(herdr pane list | python3 -c 'import json,sys;w=sys.argv[1];ps=json.load(sys.stdin)["result"]["panes"];print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),""))' $W)
   dirty=$(git -C $W status --porcelain | wc -l | tr -d ' ')
   ahead=$(git -C $W rev-list --count @{u}..HEAD 2>/dev/null || git -C $W rev-list --count origin/main..HEAD 2>/dev/null || echo "?")
+  # who else lives in this thread? (new layout: souls[]; old layout or no row: just this soul)
+  left=$(python3 -c 'import json,sys
+f,t,o=sys.argv[1:]
+try: r=json.load(open(f)).get("groups",{}).get(t)
+except Exception: r=None
+if r is None: print("norow")
+elif "souls" in r: print(" ".join(s for s in r["souls"] if s!=o) or "none")
+else: print("none")' $LARIS ${th:-x} $o)
   echo "plan: take $o out of ${R:t}"
   echo "  1. close pane ${pane:-none}"
-  echo "  2. remove Laris row for thread ${th:-?} (backup first)"
-  echo "  3. archive thread ${th:-?} (Nothing is Deleted: it stays readable)"
+  if [[ $left = norow ]]; then
+    echo "  2. no Laris row for thread ${th:-?}: nothing to change there"
+    echo "  3. thread ${th:-?} not archived (no row says who lives in it)"
+  elif [[ $left = none ]]; then
+    echo "  2. remove Laris row for thread ${th:-?} ($o was the last soul; backup first)"
+    echo "  3. archive thread ${th:-?} (Nothing is Deleted: it stays readable)"
+  else
+    echo "  2. drop $o from souls[] of thread ${th:-?} (backup first); stays: $left"
+    echo "  3. thread ${th:-?} stays open (other souls live there)"
+  fi
   echo "  4. worktree stays: $dirty uncommitted, $ahead unpushed — remove later with: git -C $R worktree remove $W"
   (( GO )) || { echo "(plan only; add --go to do 1-3)"; exit 0; }
   [[ -n $pane ]] && herdr pane close $pane >/dev/null && echo "  ✓ pane closed"
-  if [[ -n $th ]]; then
+  if [[ -n $th && $left != norow ]]; then
     cp $LARIS $LARIS.bak-$(date +%Y%m%d-%H%M%S)-soul-out
-    python3 -c 'import json,sys;f,t=sys.argv[1:];a=json.load(open(f));a.get("groups",{}).pop(t,None);json.dump(a,open(f,"w"),indent=2)' $LARIS $th && echo "  ✓ Laris row removed"
+    python3 -c 'import json,sys
+f,t,o=sys.argv[1:]; a=json.load(open(f)); g=a.get("groups",{}); r=g.get(t,{})
+rest=[s for s in r.get("souls",[]) if s!=o]
+if rest:
+    r["souls"]=rest
+    r["note"]=r.get("note","").split(": souls ")[0]+": souls "+", ".join(rest)+" answer with their own bots when tagged; Laris hears (own thread), silent unless tagged"
+else: g.pop(t,None)
+json.dump(a,open(f,"w"),indent=2)' $LARIS $th $o && echo "  ✓ Laris row updated ($o out)"
+  fi
+  if [[ -n $th && $left = none ]]; then
     T=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
     code=$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH -H "Authorization: Bot $T" -H 'Content-Type: application/json' \
       -d '{"archived":true}' https://discord.com/api/v10/channels/$th)

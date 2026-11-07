@@ -44,7 +44,22 @@ Move a LIVE body (built before 2026-11-07) to #repo › owner/repo: `$S <oracle>
 without `--dry`. It rewrites access.json, launch.sh, CLAUDE.local.md (backups `.bak-<ts>-migrate`) and the Laris rows
 (new thread added; old thread row kept with note "moved to #repo", requireMention true). It never opens a pane or
 starts claude: re-running the plain script on a live body starts a second claude on the same bot token (rival gateway).
-Then quit the live claude in its pane and run the printed `restart: herdr pane run <pane> 'RESUME=1 <wt>/.discord/launch.sh'`.
+`--deny-main` (only after Nat's go) also writes `{ deny: true }` for the #repo channel into the oracle's MAIN body
+`~/.claude/channels/<oracle>/access.local.json`, so a main body sharing the bot never hears or joins #repo threads
+(Pulse's main body on white, w47:p1, joined #repo › laris-co/soul-in-repo that way, 2026-11-07). If the main body
+lives on another machine (config.yaml `machine:`), the script prints the `herdr --machine` prompt for that box's agent.
+
+Restart steps (the live claude still runs the old files until it restarts):
+
+1. Post a short "restarting, back in a minute" note in the thread (tags sent during the gap are lost: the gateway
+   is down, 2026-11-07 Nat's two tags at 04:18:46/52 never arrived).
+2. `/exit` the live claude: `herdr agent prompt <pane> "/exit"`.
+3. WAIT for the shell prompt, never sleep: `herdr pane wait-output <pane> --regex 'took [0-9]+[hms]' --source visible --lines 6 --timeout 30000`.
+   Seen live 2026-11-07 (wG5, wG6): after `/exit` the zsh prompt prints `... took 33m2s` then `❯`. On timeout: STOP,
+   read the pane (`herdr pane read <pane> --source visible --lines 20`) and send nothing. A line typed before the
+   prompt is back is lost (the first relaunch of wG5 was).
+4. `herdr pane run <pane> 'RESUME=1 <wt>/.discord/launch.sh'` (the line the script prints).
+5. Wait for `<wt>/.discord/status.json` `gateway.ready`, then `fetch_messages` the thread for anything sent in the gap.
 
 Then wait (Monitor, never sleep) for `<wt>/.discord/status.json` `gateway.ready`, and brief the pane:
 `herdr agent prompt <pane> "Read CLAUDE.local.md, post one hello in thread <id>"`. Confirm the hello in Discord
