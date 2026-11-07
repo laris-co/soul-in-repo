@@ -3,21 +3,22 @@
 Put an oracle's **soul** to work inside **another repo**, in that repo's Discord thread.
 
 ```
-#repo                 one channel for every repo
-  └─ <owner>/<repo>   thread = the repo, shared by every soul of it
+<owner>∕<repo>        one channel per repo (U+2215; --chname dash: <owner>-<repo>)
+  ├─ neo-oracle       one thread per oracle, opened by its own bot
+  └─ somsri-oracle    the repo's main checkout (--main)
 body: <repo>/wt/<oracle>-soul   (branch soul/<oracle>)
-ears: that thread only, answer only when tagged     eyes: every room the bot can see
+ears: its own thread, every line     eyes: every room the bot can see     Laris: tags only
 ```
 
 - `SKILL.md`: the Claude Code skill (model, run steps, traps met for real, undo)
 - `soul-in-repo.sh`: the script the skill runs
 
-The script finds or creates #repo and the `<owner>/<repo>` thread (reused and unarchived if it exists), then the worktree, `.discord/access.json`,
+The script finds or creates the `<owner>∕<repo>` channel (never a second one), the soul's bot finds or opens its `<oracle>` thread (reused and unarchived if it exists), then the worktree, `.discord/access.json`,
 `.discord/launch.sh`, its own herdr space and the Laris host row, then posts a hello.
 Tokens come from `pass` at launch and never touch this repo.
 
-Layout since 2026-11-07 (Nat): #repo › `<owner>/<repo>`. Bodies built before it still live in the old
-channel = oracle threads: #neo-oracle › nongbua-oracle, oracle-gods-eys-os, esp32-line-beacon, soul-in-repo (m5) ·
+Layout 9 since 2026-11-07 06:34Z (Nat): channel `<owner>∕<repo>` › thread `<oracle>`. Before it: #repo › `<owner>/<repo>`
+(soul-in-repo's Neo, Pulse, Somsri; move with `--migrate`). Before that, channel = oracle threads: #neo-oracle › nongbua-oracle, oracle-gods-eys-os, esp32-line-beacon, soul-in-repo (m5) ·
 #pulse-oracle › soul-in-repo (m5) · #calliope-oracle › aiexpo-oracle (white) · #digger-oracle › theognosis (white).
 They stay as they are until each is rebuilt; old threads get archived, never deleted.
 
@@ -37,14 +38,14 @@ bin/herdr-soul list | ls [repo] | check <oracle> [repo] | in <oracle> [repo] [--
 
 Skill: `skills/herdr-soul/SKILL.md` (install: `ln -s <this repo>/skills/herdr-soul ~/.claude/skills/herdr-soul`).
 `in` calls `check`, then `soul-in-repo.sh`. `in` and `out --go` touch the Laris access file: terminal go only.
-`in` also passes `--migrate` and `--deny-main` through to `soul-in-repo.sh` (with `--migrate` it skips `check`, since the body is already in).
+`in` also passes `--migrate`, `--deny-main`, `--main` and `--chname=dash` through to `soul-in-repo.sh` (with `--migrate` it skips `check`, since the body is already in).
 
 ## maw soul — the same verbs from any folder (2026-11-07)
 
 ```bash
 maw soul list | ls [repo] | check <oracle> [repo]
-maw soul in <oracle> [repo] [--deny-main] [--yes]
-maw soul migrate <oracle> [repo] [--deny-main] [--yes]
+maw soul in <oracle> [repo] [--deny-main] [--main] [--chname=dash] [--yes]
+maw soul migrate <oracle> [repo] [--deny-main] [--main] [--chname=dash] [--yes]
 maw soul out <oracle> [repo] [--yes]
 ```
 

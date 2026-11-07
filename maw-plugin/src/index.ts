@@ -8,7 +8,8 @@
 //   maw soul in      <oracle> [repo]       plan; --yes brings the soul in
 //   maw soul out     <oracle> [repo]       plan; --yes takes it out (herdr-soul out --go)
 //   maw soul migrate <oracle> [repo]       plan; --yes moves a LIVE body to #repo (soul-in-repo.sh --migrate)
-//   --deny-main on in / migrate: also keep the oracle's main body out of #repo (soul-in-repo.sh --deny-main)
+//   --deny-main / --main / --chname=dash on in / migrate: passed to soul-in-repo.sh (layout 9: channel per repo,
+//   thread per oracle)
 //
 // in / out / migrate write access rows. Without --yes they only print the plan (--dry), so an agent
 // that runs them by mistake changes nothing. Run them with --yes only on Nat's go from a terminal.
@@ -26,10 +27,12 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   maw soul check     <oracle> [repo]    preflight only; prints the fix for each failed item
   maw soul in        <oracle> [repo]    plan; add --yes to bring the soul in
   maw soul out       <oracle> [repo]    plan; add --yes to take it out
-  maw soul migrate   <oracle> [repo]    plan; add --yes to move a live body to #repo › <owner>/<repo>
+  maw soul migrate   <oracle> [repo]    plan; add --yes to move a live body to its own thread in <owner>∕<repo>
 
   [repo]  owner/name, an absolute path, or empty = the git repo of this folder
-  --deny-main  with in / migrate: also keep the oracle's main body out of #repo
+  --deny-main  with in / migrate: also keep the oracle's main body out of the repo channel
+  --main       with in / migrate: the repo's MAIN checkout is the body (.discord/ in the repo root)
+  --chname=dash  with in / migrate: channel <owner>-<repo> instead of <owner>∕<repo> (U+2215)
   --dry   plan only (the default for in/out/migrate)
   --yes   run it. These write access rows: only on Nat's go from a terminal.
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
@@ -44,7 +47,10 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const yes = args.includes("--yes");
   const dryAsked = args.includes("--dry");
   const denyMain = args.includes("--deny-main");
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main");
+  const main = args.includes("--main");
+  const chname = args.find(a => a.startsWith("--chname="));
+  if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--main" && a !== chname);
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
@@ -59,9 +65,9 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const oracle = oracleName(pos[0]);
   const repo = pos.slice(1);
   const dry = !yes || dryAsked;
-  if (verb === "out" && denyMain) return { error: "--deny-main goes with in or migrate, not out" };
+  if (verb === "out" && (denyMain || main || chname)) return { error: "--deny-main, --main and --chname go with in or migrate, not out" };
   if (verb === "out") return { argv: ["out", oracle, ...repo, ...(dry ? [] : ["--go"])], dry };
-  const pass = [...(verb === "migrate" ? ["--migrate"] : []), ...(denyMain ? ["--deny-main"] : [])];
+  const pass = [...(verb === "migrate" ? ["--migrate"] : []), ...(denyMain ? ["--deny-main"] : []), ...(main ? ["--main"] : []), ...(chname ? [chname] : [])];
   return { argv: ["in", oracle, ...repo, ...pass, ...(dry ? ["--dry"] : [])], dry };
 }
 
