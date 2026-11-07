@@ -53,3 +53,13 @@ test("room: many souls, plan unless --yes, channel pin passes through", () => {
   expect("error" in plan(["room", "laris-co/x"])).toBe(true);
   expect("error" in plan(["room", "laris-co/x", "neo", "--chname=dash"])).toBe(true);
 });
+
+test("link / unlink: plan unless --yes, link options pass through", () => {
+  const w = "/Users/x/.herdr/worktrees/soul-in-repo/worktree-green-forest-241b";
+  expect(plan(["link", w])).toEqual({ argv: ["link", w, "--dry"], dry: true });
+  expect(plan(["link", w, "--bot=somsri-oracle", "--name=green", "--channel=1568518331600867338", "--yes"])).toEqual({ argv: ["link", w, "--bot=somsri-oracle", "--name=green", "--channel=1568518331600867338", "--yes"], dry: false });
+  expect(plan(["unlink", w, "--yes"])).toEqual({ argv: ["unlink", w, "--yes"], dry: false });
+  expect("error" in plan(["link"])).toBe(true);
+  expect("error" in plan(["unlink", w, "--name=x"])).toBe(true);
+  expect("error" in plan(["in", "neo", "--bot=x"])).toBe(true);
+});

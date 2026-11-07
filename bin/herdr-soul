@@ -8,6 +8,11 @@
 #   herdr-soul room  <repo> <oracle>...  layout 9 for many souls at once: per oracle, --migrate if it already has a body
 #                                        in <repo>, else in; always --deny-main. Plan by default; --yes runs (Nat's go).
 #                                        --channel=<id> reuses an existing room (e.g. #💧・nongbua). Prints what it leaves undone.
+#   herdr-soul link  <wt-path> [--bot=<oracle>] [--channel=<id>] [--name=<thread>] [--pane=<bot body pane>]
+#                                        connect a manual worktree to an EXISTING bot body by forward (no second gateway):
+#                                        the bot opens thread <name>, its access gets {forwardTo: <wt>, answerCmd}, claude
+#                                        starts in <wt> beside the bot body without Discord env. Plan by default; --yes runs.
+#   herdr-soul unlink <wt-path> [--bot=<oracle>]   archive that thread and drop the forward row (backup). Plan; --yes runs.
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
 # Laris rows, newest first. layout 9 (2026-11-07 06:34Z): one row per repo CHANNEL (<owner>∕<repo>), "layout": 9,
@@ -21,8 +26,8 @@ TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
 LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}   # override for tests
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
-DRY=0; GO=0; YES=0; ARGS=(); PASS=()   # PASS = flags handed to soul-in-repo.sh by `in`
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+DRY=0; GO=0; YES=0; ARGS=(); PASS=(); BOT=somsri-oracle; NAME=""; BPANE=""   # PASS = flags handed to soul-in-repo.sh by `in`
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -207,6 +212,83 @@ room)
   (( ${#failed} == 0 ))
   ;;
 
+link|unlink)
+  # Nat 2026-11-07 (Discord repo-soul, via Laris): "can this make maw cli?" A manual herdr worktree joins an existing bot
+  # body by FORWARD: the bot body's gateway hears the thread and prompts the worktree's agent (plugin forwardToWorktree);
+  # the worktree answers with discord-say.sh (REST only). One bot = one gateway, so no double answers.
+  W=${ARGS[2]:?"worktree: herdr-soul $VERB <wt-path> [--bot=<oracle>] [--yes]"}; W=${W:A}
+  [[ -d $W ]] || { echo "no folder $W"; exit 1; }
+  run=$(( YES && !DRY ))
+  SAY=$TEAM/tools/discord-say.sh
+  if [[ $BOT = somsri-oracle ]]; then ACC=$GHQ/github.com/laris-co/somsri-oracle/.discord/access.json
+  else ACC=$HOME/.claude/channels/$BOT/access.local.json; fi
+  pass show discord/$BOT-token >/dev/null 2>&1 || { echo "no pass discord/$BOT-token"; exit 1; }
+  [[ -f $ACC ]] || { echo "no access file for $BOT at $ACC (is its body set up?)"; exit 1; }
+  existing=$(python3 -c 'import json,sys
+g=json.load(open(sys.argv[1])).get("groups",{})
+print(next((k for k,v in g.items() if v.get("forwardTo")==sys.argv[2]),""))' $ACC $W)
+  if [[ $VERB = unlink ]]; then
+    [[ -n $existing ]] || { echo "no forward row for $W in $ACC: nothing to unlink"; exit 1; }
+    echo "plan: unlink $W from $BOT"
+    echo "  1. archive thread $existing (as $BOT; Nothing is Deleted: it stays readable)"
+    echo "  2. back up $ACC, then drop groups[$existing] (forwardTo $W)"
+    echo "  3. the agent pane in $W stays open: close it yourself when its work is pushed"
+    (( run )) || { echo "plan only. To run (Nat's go): herdr-soul unlink $W --bot=$BOT --yes"; exit 0; }
+    T=$(pass show discord/$BOT-token | head -1 | tr -d '[:space:]')
+    code=$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH -H "Authorization: Bot $T" -H 'Content-Type: application/json' \
+      -d '{"archived":true}' https://discord.com/api/v10/channels/$existing)
+    echo "  ✓ thread archive: HTTP $code"
+    cp -p $ACC $ACC.bak-$(date +%Y%m%d-%H%M%S)-unlink
+    python3 -c 'import json,sys
+f,k=sys.argv[1:]; a=json.load(open(f)); a["groups"].pop(k,None); json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $existing
+    echo "  ✓ row $existing dropped (backup beside $ACC)"
+    exit 0
+  fi
+  [[ -z $existing ]] || { echo "already linked: $W -> thread $existing in $ACC (unlink first)"; exit 1; }
+  git -C $W rev-parse --is-inside-work-tree >/dev/null 2>&1 || { echo "$W is not a git worktree"; exit 1; }
+  NAME=${NAME:-${W:t}}
+  pin=${PASS[(r)--channel=*]:-}; CH=${pin#--channel=}
+  if [[ -z $CH ]]; then  # the layout-9 channel of the worktree's repo, from Laris's rows
+    full=$(repo_full $(git -C $W rev-parse --path-format=absolute --git-common-dir | xargs dirname))
+    CH=$(python3 -c 'import json,sys
+try: g=json.load(open(sys.argv[1])).get("groups",{})
+except Exception: g={}
+print(next((k for k,v in g.items() if v.get("layout")==9 and v.get("repo")==sys.argv[2]),""))' $LARIS $full)
+    [[ -n $CH ]] || { echo "no layout-9 channel for $full in Laris rows: pass --channel=<id>"; exit 1; }
+  fi
+  if [[ -z $BPANE ]]; then  # the bot body's pane: the agent whose cwd is the bot's home
+    home=$([[ $BOT = somsri-oracle ]] && echo $GHQ/github.com/laris-co/somsri-oracle || soul_dir $BOT)
+    BPANE=$(herdr agent list 2>/dev/null | python3 -c 'import json,sys
+h=sys.argv[1]; a=json.load(sys.stdin)["result"]["agents"]
+print(next((x["pane_id"] for x in a if x.get("cwd")==h and x.get("agent")=="claude"),""))' $home)
+    [[ -n $BPANE ]] || { echo "no live $BOT body pane (cwd $home): pass --pane=<id>"; exit 1; }
+  fi
+  ANS="BOT=$BOT $SAY"
+  echo "plan: link $W -> $BOT by forward (no second gateway)"
+  echo "  1. as $BOT: post '🔗 $NAME' in channel $CH, open thread '$NAME' on it ($SAY --thread)"
+  echo "  2. back up $ACC, add groups[<thread>] = {requireMention: false, forwardTo: $W,"
+  echo "       answerCmd: \"$ANS\", allowFrom: [Nat, catbutter]}"
+  echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR"
+  echo "  4. test: Nat types a line in the thread; the $BOT body forwards it to that pane, which answers with answerCmd"
+  (( run )) || { echo "plan only. To run (Nat's go): herdr-soul link $W --bot=$BOT${pin:+ $pin}${NAME:+ --name=$NAME} --yes"; exit 0; }
+  mid=$(BOT=$BOT $SAY $CH "🔗 $NAME: worktree ${W/#$HOME/~} joins through $BOT (forward, no second gateway)" | sed -n 's/^sent (id: \([0-9]*\))$/\1/p')
+  [[ -n $mid ]] || { echo "stop: could not post in $CH as $BOT"; exit 1; }
+  TH=$(BOT=$BOT $SAY --thread $CH $mid "$NAME" | sed -n 's/^thread (id: \([0-9]*\))$/\1/p')
+  [[ -n $TH ]] || { echo "stop: could not open thread on $mid (message stays; nothing else changed)"; exit 1; }
+  echo "  ✓ thread '$NAME' $TH"
+  cp -p $ACC $ACC.bak-$(date +%Y%m%d-%H%M%S)-link
+  python3 -c 'import json,sys
+f,th,w,ans,n=sys.argv[1:]; a=json.load(open(f)); a.setdefault("groups",{})[th]={"requireMention":False,"forwardTo":w,"answerCmd":ans,
+ "allowFrom":["691531480689541170","917019242094817301"],"note":"link: thread %s forwards to worktree %s (herdr-soul link)" % (n,w)}
+json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $TH $W $ANS $NAME
+  echo "  ✓ row $TH in $ACC (backup beside it)"
+  NP=$(herdr pane split $BPANE --direction down | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
+  herdr pane run $NP "cd ${(q)W} && env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR claude --dangerously-skip-permissions" >/dev/null
+  echo "  ✓ claude starting in $NP ($W)"
+  echo "test: type one line in thread $TH as Nat; expect a prompt in $NP and an answer signed by $BOT"
+  echo "      check the row: python3 -m json.tool $ACC | rg -A3 $TH"
+  ;;
+
 out)
   o=${ARGS[2]:?oracle}; R=$(repo_path ${ARGS[3]:-}); W=$R/wt/$o-soul
   [[ -d $W ]] || { echo "no soul body at $W"; exit 1; }
@@ -255,7 +337,7 @@ f,t,o=sys.argv[1:]; a=json.load(open(f)); g=a.get("groups",{}); r=g.get(t,{})
 rest=[s for s in r.get("souls",[]) if s!=o]
 if rest and r.get("layout")==9:
     r["souls"]=rest; r.get("threads",{}).pop(o,None)
-    r["note"]="repo channel %s (layout 9): souls %s each answer in their own thread; Laris hears tags only, never types" % (r.get("channel","?"), ", ".join(rest))
+    r["note"]="repo channel %s (layout 9): souls %s each answer in their own thread; Laris hears every line, answers only when tagged" % (r.get("channel","?"), ", ".join(rest))
 elif rest:
     r["souls"]=rest
     r["note"]=r.get("note","").split(": souls ")[0]+": souls "+", ".join(rest)+" answer with their own bots when tagged; Laris hears (own thread), silent unless tagged"

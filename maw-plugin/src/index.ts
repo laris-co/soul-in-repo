@@ -9,6 +9,8 @@
 //   maw soul out     <oracle> [repo]       plan; --yes takes it out (herdr-soul out --go)
 //   maw soul migrate <oracle> [repo]       plan; --yes moves a LIVE body to #repo (soul-in-repo.sh --migrate)
 //   maw soul room    <repo> <oracle>...    layout 9 for many souls: migrate a live body, else in; always --deny-main
+//   maw soul link    <wt-path>             a manual worktree joins an existing bot body by forward (no second gateway)
+//   maw soul unlink  <wt-path>             archive its thread, drop the forward row
 //   --deny-main / --chname=dash on in / migrate: passed to soul-in-repo.sh (layout 9: channel per repo,
 //   thread per oracle)
 //
@@ -31,6 +33,10 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   maw soul migrate   <oracle> [repo]    plan; add --yes to move a live body to its own thread in <owner>∕<repo>
   maw soul room      <repo> <oracle>... plan for many souls at once (migrate a live body, else in; always --deny-main);
                                         --channel=<id> reuses an existing room; add --yes to run
+  maw soul link      <wt-path>          plan; a manual worktree joins an existing bot body by forward (no second gateway):
+                                        thread opened by the bot, forward row in its access, claude in the wt beside it.
+                                        --bot=<oracle> (default somsri-oracle) --channel=<id> --name=<thread> --pane=<id>
+  maw soul unlink    <wt-path>          plan; archive the thread, drop the forward row (backup). --bot=<oracle>
 
   [repo]  owner/name, an absolute path, or empty = the git repo of this folder
   --deny-main  with in / migrate: also keep the oracle's main body out of the repo channel
@@ -40,7 +46,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   --yes   run it. These write access rows: only on Nat's go from a terminal.
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
-const WRITES = new Set(["in", "out", "migrate", "room"]);
+const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink"]);
 const READS = new Set(["list", "ls", "check"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
@@ -54,7 +60,8 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const pin = args.find(a => a.startsWith("--channel="));
   if (pin && !/^--channel=\d{15,22}$/.test(pin)) return { error: `${pin}: use --channel=<channel id>` };
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== chname && a !== pin);
+  const linkOpts = args.filter(a => /^--(bot|name|pane)=/.test(a));
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== chname && a !== pin && !linkOpts.includes(a));
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
@@ -65,6 +72,14 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
     return { argv: [verb, ...pos], dry: false };
   }
   if (!WRITES.has(verb)) return { error: `unknown verb ${verb}\n  maw soul help` };
+  if (linkOpts.length && verb !== "link" && verb !== "unlink") return { error: "--bot, --name and --pane go with link / unlink" };
+  if (verb === "link" || verb === "unlink") {
+    if (!pos[0]) return { error: `which worktree?\n  maw soul ${verb} <wt-path> [--bot=<oracle>] [--yes]` };
+    if (denyMain || chname) return { error: `--deny-main and --chname do not go with ${verb}` };
+    if (verb === "unlink" && (pin || linkOpts.some(a => !a.startsWith("--bot=")))) return { error: "unlink takes only --bot=<oracle>" };
+    const d = !yes || dryAsked;
+    return { argv: [verb, pos[0]!, ...linkOpts, ...(pin ? [pin] : []), d ? "--dry" : "--yes"], dry: d };
+  }
   if (verb === "room") {
     if (pos.length < 2) return { error: "which repo and oracles?\n  maw soul room <repo> <oracle>... [--channel=<id>] [--yes]" };
     if (denyMain || chname) return { error: "room always passes --deny-main; --chname is for in / migrate" };

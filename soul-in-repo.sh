@@ -3,7 +3,7 @@
 #   Layout 9 (Nat 2026-11-07 06:34Z, #research › repo-soul): ONE channel per repo, named <owner>∕<repo>
 #   (U+2215 DIVISION SLASH; --chname dash or CHNAME=dash gives <owner>-<repo>), ONE thread per oracle, named <oracle>,
 #   opened by THAT oracle's own bot. Own thread: the soul hears every line untagged. Laris Labs Oracle keeps one row per
-#   repo channel (requireMention true: hears tags only, never types) listing souls[] and threads{oracle: thread}.
+#   repo channel (requireMention false, same as the souls: hears every line, answers only when tagged; Nat 2026-11-07 "why not same?") listing souls[] and threads{oracle: thread}.
 #   Was: #repo › <owner>/<repo> shared by every soul (morning of 2026-11-07); before that #<oracle> › <repo> (2026-11-05).
 #   --migrate    move a LIVE body to its layout-9 thread: rewrite its access.json, launch.sh and soul note (backups
 #                beside them) and the Laris rows; NO worktree, trust, pane or launch (a second claude on the same bot
@@ -59,7 +59,7 @@ echo "plan: channel '$CHN' (layout 9; ${CHPIN:+pinned $CHPIN, else }match '$CHN'
 echo "      thread '$oracle' in it, found/reused/unarchived or opened by the $oracle bot (own thread); humans Nat + catbutter"
 echo "      worktree $W (branch soul/$oracle) · bot $oracle · claude $ctok · DISCORD_ORACLE=$oracle"
 echo "      ears: thread '$oracle', requireMention false (its own thread) · eyes: guild read-only · note: $NOTE"
-echo "      Laris row: the CHANNEL '$CHN', requireMention true (hears tags only), souls[] += $oracle, threads{$oracle}"
+echo "      Laris row: the CHANNEL '$CHN', requireMention false (hears every line, answers only when tagged), souls[] += $oracle, threads{$oracle}"
 S=${HERDR_SESSION:-laris-co}
 OLD=""; P=""
 if (( MIG )); then
@@ -229,7 +229,7 @@ P=$(herdr --session $S worktree open --workspace "$MWS" --path "$W" --label "wt/
   | python3 -c 'import sys,re; print(re.search(r"\"pane_id\": ?\"([^\"]+)\"", sys.stdin.read()).group(1))')
 herdr --session $S pane run $P "$W/.discord/launch.sh" >/dev/null
 fi
-# 6. Laris channel row: one per repo channel, hears tags only; old thread row kept (Nothing is Deleted)
+# 6. Laris channel row: one per repo channel, requireMention false like the souls (Nat "why not same?"), answers only when tagged; old thread row kept (Nothing is Deleted)
 L=$HOME/.claude/channels/laris-labs-oracle/access.local.json
 cp $L $L.bak-$(date +%Y%m%d-%H%M%S)-soul-$name
 python3 - $L $CH "$CHN" $TH "$oracle" "$full" "${OLD:-}" <<'PY'
@@ -246,9 +246,9 @@ if old and old != th and old != ch and old in g:
 row = g.get(ch, {})
 souls = sorted(set(row.get("souls", [])) | {o})
 threads = {**row.get("threads", {}), o: th}
-g[ch] = {"requireMention": True, "allowFrom": ["691531480689541170", "917019242094817301"], "layout": 9,
+g[ch] = {"requireMention": False, "allowFrom": ["691531480689541170", "917019242094817301"], "layout": 9,
   "channel": chn, "repo": n, "souls": souls, "threads": threads,
-  "note": f"repo channel {chn} (layout 9): souls {', '.join(souls)} each answer in their own thread; Laris hears tags only, never types"}
+  "note": f"repo channel {chn} (layout 9): souls {', '.join(souls)} each answer in their own thread; Laris hears every line, answers only when tagged"}
 json.dump(a, open(f, "w"), indent=2)
 PY
 # 7. (--deny-main) the oracle's MAIN body must never hear or join this repo channel (same bot, own access files)
