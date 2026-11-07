@@ -82,7 +82,35 @@ ls)
   git -C $R worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r W; do
     [[ $W = */wt/*-soul ]] || continue; found=1
     o=${${W:t}%-soul}
-    th=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),"-"))' $W/.discord/access.json 2>/dev/null || echo -)
+    # every room row of the soul (Laris 2026-11-07: ls showed only the first row, the old #repo thread).
+    # The soul's own layout-9 thread goes first; a #repo row is a leftover once a layout-9 row exists.
+    th=$(python3 - $W/.discord/access.json "$LARIS" $o <<'PY3' 2>/dev/null || echo -
+import json,sys
+a,lf,o=sys.argv[1:]
+g=json.load(open(a)).get("groups",{})
+try: L=json.load(open(lf)).get("groups",{})
+except Exception: L={}
+l9={v.get("threads",{}).get(o) for v in L.values() if v.get("layout")==9}
+repo={k for k,v in L.items() if "souls" in v and v.get("layout")!=9}
+old={k for k,v in L.items() if " soul in " in v.get("note","") and not v.get("note","").startswith("moved to")}
+def kind(k,v):
+    n=v.get("note","")
+    if v.get("deny"): return 3,"deny"
+    if k in l9 or n.startswith("layout 9"): return 0,"layout 9"
+    if n.startswith("office"): return 1,"office"
+    if k in repo: return 2,"#repo"
+    if k in old: return 2,"old layout"
+    return 2,""
+rows=sorted(((*kind(k,v),k,v) for k,v in g.items()),key=lambda r:r[0])
+has9=any(r[0]==0 for r in rows)
+out=[]
+for _,lab,k,v in rows:
+    if lab=="#repo" and has9: lab="#repo leftover"
+    ears="tag" if v.get("requireMention") else "all"
+    out.append(f"{k} ({lab+', ' if lab else ''}{ears})")
+print(out[0]+("  also: "+", ".join(out[1:]) if out[1:] else "") if out else "-")
+PY3
+)
     ready=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print("ready" if d.get("gateway",{}).get("ready") else "not ready")' $W/.discord/status.json 2>/dev/null || echo "no status")
     pane=$(herdr pane list 2>/dev/null | python3 -c 'import json,sys
 w=sys.argv[1]
@@ -90,9 +118,8 @@ try:
   ps=json.load(sys.stdin)["result"]["panes"]
   print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),"-"))
 except Exception: print("-")' $W)
-    lay=$(print -r -- $where_all | awk -v t=$th -v o=$o '$1==t && $3==o{print $2}' | head -1)
-    case $lay in l9) lay="layout 9";; repo) lay="#repo layout";; old) lay="old layout";; esac
-    echo "  $o  thread $th${lay:+ ($lay)}  pane $pane  gateway $ready  ($W)"
+    echo "  $o  pane $pane  gateway $ready  ($W)"
+    echo "      thread $th"
   done
   python3 - "$LARIS" "$full" <<'PY2'
 import json,sys
