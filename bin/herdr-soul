@@ -5,6 +5,9 @@
 #   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
 #   herdr-soul in    <oracle> [repo]     check, then soul-in-repo.sh (channel, thread, worktree, space, Laris row, hello)
 #                                        --migrate / --deny-main / --chname=dash / --channel=<id> are passed through to soul-in-repo.sh
+#   herdr-soul room  <repo> <oracle>...  layout 9 for many souls at once: per oracle, --migrate if it already has a body
+#                                        in <repo>, else in; always --deny-main. Plan by default; --yes runs (Nat's go).
+#                                        --channel=<id> reuses an existing room (e.g. #💧・nongbua). Prints what it leaves undone.
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
 # Laris rows, newest first. layout 9 (2026-11-07 06:34Z): one row per repo CHANNEL (<owner>∕<repo>), "layout": 9,
@@ -18,8 +21,8 @@ TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
 LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}   # override for tests
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
-DRY=0; GO=0; ARGS=(); PASS=()   # PASS = flags handed to soul-in-repo.sh by `in`
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+DRY=0; GO=0; YES=0; ARGS=(); PASS=()   # PASS = flags handed to soul-in-repo.sh by `in`
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -176,6 +179,34 @@ in)
   if (( DRY )); then zsh $SCRIPT $o $R $PASS --dry; else zsh $SCRIPT $o $R $PASS; fi
   ;;
 
+room)
+  # Nat 2026-11-07 11:15Z (via Laris): "make cli ... then run" layout 9 on many souls at once.
+  R=$(repo_path ${ARGS[2]:?"repo: herdr-soul room <repo> <oracle>... [--channel=<id>] [--yes]"}); full=$(repo_full $R)
+  (( ${#ARGS} >= 3 )) || { echo "which oracles?  herdr-soul room $full neo-oracle pulse-oracle --dry"; exit 2; }
+  run=$(( YES && !DRY ))
+  pin=${PASS[(r)--channel=*]:-}
+  (( run )) && how=RUN || how="plan only"
+  echo "room: $full ($R) · ${pin:-channel found by name <owner>∕<repo>} · $how"
+  export HERDR_SOUL_DIR
+  ok=(); failed=()
+  for o in ${ARGS[3,-1]}; do
+    o=${o%-oracle}-oracle; W=$R/wt/$o-soul
+    if [[ -f $W/.discord/access.json ]]; then mode=migrate; fl=(--migrate); else mode=in; fl=(); fi
+    echo; echo "── $o: $mode (--deny-main${pin:+ $pin})"
+    if [[ $mode = in ]] && ! $0 check $o $R; then failed+="$o (check failed)"; continue; fi
+    HERDR_SOUL_DIR=$(soul_dir $o)
+    if (( run )); then zsh $SCRIPT $o $R $fl --deny-main ${pin:+$pin}; else zsh $SCRIPT $o $R $fl --deny-main ${pin:+$pin} --dry; fi \
+      && ok+="$o ($mode)" || failed+="$o ($mode exited $?)"
+  done
+  echo; echo "room summary: ${#ok} ok${ok:+: ${(j:, :)ok}} · ${#failed} failed${failed:+: ${(j:, :)failed}}"
+  echo "not done by room (do these by hand, each on Nat's terminal go):"
+  echo "  • office thread: the Somsri bot opens 'office' in the channel; rows for it in somsri-oracle/.discord (all) and in each soul (tag)"
+  echo "  • main bodies on other machines: --deny-main only prints their herdr --machine prompt; send it to that box's agent"
+  echo "  • old rooms: archive the leftover #repo / per-oracle threads once the souls hear their new threads"
+  (( run )) || echo "plan only. To run (Nat's go, from a terminal): herdr-soul room $full ${ARGS[3,-1]}${pin:+ $pin} --yes"
+  (( ${#failed} == 0 ))
+  ;;
+
 out)
   o=${ARGS[2]:?oracle}; R=$(repo_path ${ARGS[3]:-}); W=$R/wt/$o-soul
   [[ -d $W ]] || { echo "no soul body at $W"; exit 1; }
@@ -239,5 +270,5 @@ json.dump(a,open(f,"w"),indent=2)' $LARIS $key $o && echo "  ✓ Laris row updat
   fi
   ;;
 
-*) sed -n '2,9p' $0; exit 2;;
+*) sed -n '2,12p' $0; exit 2;;
 esac

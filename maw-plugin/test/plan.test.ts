@@ -45,3 +45,11 @@ test("layout 9 flags pass through to in / migrate only", () => {
   expect("error" in plan(["in", "neo", "--channel=abc"])).toBe(true);
   expect("error" in plan(["out", "neo", "--chname=dash"])).toBe(true);
 });
+
+test("room: many souls, plan unless --yes, channel pin passes through", () => {
+  expect(plan(["room", "laris-co/nongbua-oracle", "neo", "digger-oracle"])).toEqual({ argv: ["room", "laris-co/nongbua-oracle", "neo-oracle", "digger-oracle", "--dry"], dry: true });
+  expect(plan(["room", "laris-co/x", "neo", "--channel=1567747387102072912", "--yes"])).toEqual({ argv: ["room", "laris-co/x", "neo-oracle", "--channel=1567747387102072912", "--yes"], dry: false });
+  expect(plan(["room", "laris-co/x", "neo", "--yes", "--dry"])).toEqual({ argv: ["room", "laris-co/x", "neo-oracle", "--dry"], dry: true });
+  expect("error" in plan(["room", "laris-co/x"])).toBe(true);
+  expect("error" in plan(["room", "laris-co/x", "neo", "--chname=dash"])).toBe(true);
+});
