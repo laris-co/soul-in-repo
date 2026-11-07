@@ -124,3 +124,14 @@ test("wt / wt-close: named worktree joined by forward, plan unless --yes", () =>
   expect("error" in plan(["wt", "a", "--name=x"])).toBe(true);
   expect("error" in plan(["wt-close", "a", "--channel=1568518331600867338"])).toBe(true);
 });
+
+test("--thread on link and wt: an existing thread, ids only, not with --whole-channel or on close", () => {
+  const w = "/opt/Code/github.com/laris-co/x/wt/a";
+  expect(plan(["link", w, "--thread=1568526565242044558"])).toEqual({ argv: ["link", w, "--thread=1568526565242044558", "--dry"], dry: true });
+  expect(plan(["wt", "a", "laris-co/x", "--thread=1568526565242044558", "--yes"])).toEqual({ argv: ["wt", "a", "laris-co/x", "--thread=1568526565242044558", "--yes"], dry: false });
+  expect("error" in plan(["link", w, "--thread=abc"])).toBe(true);
+  expect("error" in plan(["wt", "a", "--thread=abc"])).toBe(true);
+  expect("error" in plan(["link", w, "--thread=1568526565242044558", "--whole-channel=1568518331600867338"])).toBe(true);
+  expect("error" in plan(["unlink", w, "--thread=1568526565242044558"])).toBe(true);
+  expect("error" in plan(["wt-close", "a", "--thread=1568526565242044558"])).toBe(true);
+});
