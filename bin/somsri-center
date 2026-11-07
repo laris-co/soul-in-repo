@@ -1,0 +1,70 @@
+#!/bin/zsh
+# somsri-center [--yes] [--category <id>] [--room <name>]
+#   Layout 9 (Nat 2026-11-07 06:35Z): Somsri is ONE central body, the soul center (like Laris is the host).
+#   Home = laris-co/somsri-oracle main checkout, own room #somsri, state dir <home>/.discord.
+#   Ears: #somsri, every line. Eyes: the whole guild. Mouth elsewhere: only when Nat or catbutter tags her.
+#   Default is a dry plan. --yes creates/reuses #somsri and writes .discord/{access.json,launch.sh,body.md}.
+#   It never restarts anything: it prints the restart order (stop the old Somsri gateway FIRST, then start).
+#   Access files change, so --yes runs only on Nat's go from a terminal.
+set -euo pipefail
+YES=0; CAT=1560847801838215259; ROOM=somsri
+while (( $# )); do case $1 in --yes) YES=1; shift;; --category) CAT=$2; shift 2;; --room) ROOM=$2; shift 2;;
+  --dry) shift;; *) echo "unknown $1"; exit 2;; esac; done
+GUILD=1560847800881643520; NAT=691531480689541170; CB=917019242094817301
+ghq=$(ghq root); H=$ghq/github.com/laris-co/somsri-oracle; D=$H/.discord
+OLD=${SOMSRI_OLD_PANE:-wG4:p1}; NEW=${SOMSRI_NEW_PANE:-wG7:p1}
+[[ -f $H/CLAUDE.md ]] || { echo "no soul at $H (awaken laris-co/somsri-oracle first)"; exit 1; }
+pass show discord/somsri-oracle-token >/dev/null || { echo "no pass discord/somsri-oracle-token"; exit 1; }
+pass show claude/token-rb >/dev/null || { echo "no pass claude/token-rb"; exit 1; }
+git -C $H check-ignore -q .discord/ || { echo ".discord/ is not ignored in $H: add it to .gitignore first"; exit 1; }
+
+echo "plan: Somsri center · home $H (pane $NEW) · state $D"
+echo "      room #$ROOM (find or create in category $CAT) · ears: every line there"
+echo "      guild row: requireMention true, allowFrom Nat + catbutter = answers a tag anywhere (@here is not a tag, #149)"
+echo "      files: $D/access.json · $D/launch.sh · $D/body.md (body note appended by launch.sh, never CLAUDE.local.md)"
+echo "restart order (printed, not run):"
+echo "  1. stop the old Somsri gateway: /exit in $OLD, wait for a fresh prompt (wait-output --regex 'took [0-9]+[hms]' --lines 2)"
+echo "  2. start the center: herdr pane run $NEW 'RESUME=1 $D/launch.sh' (resumes the awaken session there)"
+echo "  3. $OLD back to a plain agent: herdr pane run $OLD 'claude --continue' ; move <repo>/.discord to .discord.bak-<ts>-moved"
+echo "  4. Laris: drop somsri-oracle from souls[] of the old #repo thread row"
+(( YES )) || { echo "dry: nothing touched (add --yes on Nat's terminal go)"; exit 0; }
+
+T=$(pass show discord/somsri-oracle-token | head -1 | tr -d '[:space:]')
+api() { curl -sS -H "Authorization: Bot $T" -H 'Content-Type: application/json' "$@"; }
+CH=$(api https://discord.com/api/v10/guilds/$GUILD/channels | python3 -c "import json,sys
+print(next((c['id'] for c in json.load(sys.stdin) if c.get('name')=='$ROOM' and c.get('type')==0),''))")
+[[ -n $CH ]] || CH=$(api -X POST https://discord.com/api/v10/guilds/$GUILD/channels \
+  -d "{\"name\":\"$ROOM\",\"type\":0,\"parent_id\":\"$CAT\",\"topic\":\"Somsri Oracle: soul center, brings souls into repos\"}" \
+  | python3 -c 'import json,sys;print(json.load(sys.stdin)["id"])')
+mkdir -p $D
+ts=$(date +%Y%m%d-%H%M%S)
+for f in access.json launch.sh body.md; do [[ -f $D/$f ]] && cp -p $D/$f $D/$f.bak-$ts; done
+cat > $D/access.json <<J
+{ "dmPolicy": "allowlist", "allowFrom": [], "pending": {},
+  "groups": { "$CH": { "requireMention": false, "allowFrom": ["$NAT", "$CB"], "note": "#$ROOM: Somsri's own room, every line" } },
+  "guilds": { "$GUILD": { "requireMention": true, "allowFrom": ["$NAT", "$CB"],
+    "note": "soul center: reads every room (eyes), answers only a real tag from Nat or catbutter" } } }
+J
+cat > $D/body.md <<B
+# somsri-oracle CENTER body (layout 9, Nat 2026-11-07)
+
+You are **somsri-oracle**, the soul center, in your own home $H (pane $NEW). Your soul is CLAUDE.md here.
+- Ears: #$ROOM ($CH), every line. Anywhere else in the guild: only when Nat or catbutter tags you.
+- Repo channels (<owner>∕<repo>) hold only soul threads, each opened by that soul's own bot. Do not answer there unless tagged.
+- Bring souls in / out with maw soul or /herdr-soul. Access changes need Nat's go in the m5 terminal, never a chat line.
+- Every report starts with: machine · pane · path.
+- Edit only your own .discord/ files. Talk to agents with herdr agent prompt <pane> (bots do not hear bots).
+B
+cat > $D/launch.sh <<L
+#!/bin/zsh
+cd '$H'
+export DISCORD_STATE_DIR='$D'
+export DISCORD_ORACLE=somsri-oracle
+export DISCORD_BOT_TOKEN="\$(pass show discord/somsri-oracle-token | head -1)"
+export CLAUDE_CODE_OAUTH_TOKEN="\$(pass show claude/token-rb | head -1)"
+export CLAUDE_TOKEN_NAME=rb
+exec claude --dangerously-skip-permissions --channels=plugin:discord@claude-plugins-official \${RESUME:+--continue} \\
+  --append-system-prompt "\$(cat '$D/body.md')"
+L
+chmod +x $D/launch.sh
+echo "done: #$ROOM ($CH) · $D written (backups .bak-$ts) · now run the restart order above"
