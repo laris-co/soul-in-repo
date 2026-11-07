@@ -57,11 +57,16 @@ Restart steps (the live claude still runs the old files until it restarts):
 1. Post a short "restarting, back in a minute" note in the thread (tags sent during the gap are lost: the gateway
    is down, 2026-11-07 Nat's two tags at 04:18:46/52 never arrived).
 2. `/exit` the live claude: `herdr agent prompt <pane> "/exit"`.
-3. WAIT for the shell prompt, never sleep: `herdr pane wait-output <pane> --regex 'took [0-9]+[hms]' --source visible --lines 6 --timeout 30000`.
-   Seen live 2026-11-07 (wG5, wG6): after `/exit` the zsh prompt prints `... took 33m2s` then `❯`. On timeout: STOP,
-   read the pane (`herdr pane read <pane> --source visible --lines 20`) and send nothing. A line typed before the
-   prompt is back is lost (the first relaunch of wG5 was).
+3. WAIT for the fresh shell prompt, never sleep:
+   `herdr pane wait-output <pane> --regex 'took [0-9]+[hms]' --source visible --lines 2 --timeout 30000`.
+   After `/exit` the zsh prompt prints `... took 33m2s` then `❯` (seen live 2026-11-07, wG5/wG6). Only the bottom
+   2 lines: while claude runs they are its status bar, after exit they are the new prompt. With `--lines 6` a STALE
+   `took` line from an earlier restart still on screen matched at once, and the relaunch was typed into claude's
+   exit and lost (twice). On timeout: STOP, read the pane (`herdr pane read <pane> --source visible --lines 20`),
+   send nothing.
 4. `herdr pane run <pane> 'RESUME=1 <wt>/.discord/launch.sh'` (the line the script prints).
+   Check it took: `herdr pane wait-output <pane> --regex 'bypass permissions' --source visible --lines 3 --timeout 60000`
+   (claude's status bar is back). On timeout: read the pane, do not type again.
 5. Wait for `<wt>/.discord/status.json` `gateway.ready`, then `fetch_messages` the thread for anything sent in the gap.
 
 Then wait (Monitor, never sleep) for `<wt>/.discord/status.json` `gateway.ready`, and brief the pane:
