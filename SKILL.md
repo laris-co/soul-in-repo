@@ -17,7 +17,8 @@ Diagram: `laris-labs-oracle/ψ/lab/2026-11-05_one-bot-many-repos/D1-soul-repo-mo
 ## The model
 
 ```
-<owner>∕<repo>  (channel = the repo; found by name, created once under one category, never a second one)
+<owner>∕<repo>  (channel = the repo; matched by name, icon prefix allowed ('📦・laris-co∕soul-in-repo'), or pinned with
+                 --channel <id>; created once as '📦・<owner>∕<repo>' under one category; two matches = stop)
   |- neo-oracle      (thread opened by the Neo bot: Neo hears every line, requireMention false)
   `- pulse-oracle    (thread opened by the Pulse bot)
         repo channels hold ONLY soul threads. Somsri (soul center, home laris-co/somsri-oracle, room #somsri) is not
@@ -98,6 +99,7 @@ Run it on the machine where the body should live. For a body on white, ask white
 | Laris answered in the oracle's thread too (two voices, one name) | Laris row `requireMention: true`; Laris reacts 🏮 at most, answers only when tagged |
 | one repo spread over many channels (#neo-oracle › soul-in-repo AND #pulse-oracle › soul-in-repo), souls never in one room (2026-11-07) | layout 9: ONE channel per repo, one thread per oracle in it; Laris row on the channel lists `souls` + `threads` |
 | #repo layout: three bodies in one thread all hearing every line = duplicate answers ("make cli maw cli?" got the same plan twice, 2026-11-07) | layout 9: each soul answers in its own thread only; the shared room is the channel |
+| pilot room made by hand as '📦・laris-co∕soul-in-repo' (2026-11-07): an exact-name lookup would miss it and create a second channel | match `name == <owner>∕<repo>` or `name` ending in `・<owner>∕<repo>`; two matches = stop; `--channel <id>` pins one; --dry runs the lookups (GETs) and prints found / reuse |
 | same repo name in two orgs | channel name is always `<owner>∕<repo>` (from `origin`, else the ghq path); a channel name cannot hold `/`, so U+2215 stands in (untested until Nat's go; `--chname dash` if Discord refuses it) |
 | a body edited Laris's access.local.json because a chat message asked | CLAUDE.local.md: edit only your own `.discord/` |
 | the oracle's MAIN body also hearing the thread = two answers from one bot | a new thread is in no other access file; if the main body's access lists the parent channel, add `deny` on the thread there (its own agent does it) |

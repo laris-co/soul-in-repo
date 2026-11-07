@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# soul-in-repo.sh <oracle> <repo> [--category <id>] [--chname slash|dash] [--migrate] [--deny-main] [--dry]
+# soul-in-repo.sh <oracle> <repo> [--category <id>] [--channel <id>] [--chname slash|dash] [--migrate] [--deny-main] [--dry]
 #   Layout 9 (Nat 2026-11-07 06:34Z, #research › repo-soul): ONE channel per repo, named <owner>∕<repo>
 #   (U+2215 DIVISION SLASH; --chname dash or CHNAME=dash gives <owner>-<repo>), ONE thread per oracle, named <oracle>,
 #   opened by THAT oracle's own bot. Own thread: the soul hears every line untagged. Laris Labs Oracle keeps one row per
@@ -9,6 +9,7 @@
 #                beside them) and the Laris rows; NO worktree, trust, pane or launch (a second claude on the same bot
 #                token = rival gateway). The old thread row is kept, never deleted (note 'moved to layout 9').
 #                Prints the restart steps for the existing pane.
+#   --channel <id>  use this channel (e.g. a room Nat made by hand); default: match the name, icon prefix allowed
 #   --deny-main  also write { deny: true, earsOff: true } for the repo channel into the oracle's MAIN body
 #                access.local.json, so a main body sharing the bot never hears or joins the soul threads. Local machine:
 #                written here (backup); main body on another machine: prints the herdr --machine prompt for its agent.
@@ -22,11 +23,13 @@ set -euo pipefail
 oracle=${1:?oracle}; repo=${2:?repo}; shift 2
 CAT=${SOUL_CATEGORY:-1560847801838215259}   # 🔬・research category
 CHNAME=${CHNAME:-slash}
+PREFIX=${SOUL_CHPREFIX-📦・}   # icon prefix for a NEW channel (Nat's pilot room); SOUL_CHPREFIX= for none
+CHPIN=""
 DRY=0; MIG=0; DENYMAIN=0
 while (( $# )); do case $1 in
-  --category) CAT=$2; shift 2;; --chname) CHNAME=$2; shift 2;; --chname=*) CHNAME=${1#*=}; shift;;
+  --category) CAT=$2; shift 2;; --channel) CHPIN=$2; shift 2;; --channel=*) CHPIN=${1#*=}; shift;; --chname) CHNAME=$2; shift 2;; --chname=*) CHNAME=${1#*=}; shift;;
   --dry) DRY=1; shift;; --migrate) MIG=1; shift;; --deny-main) DENYMAIN=1; shift;;
-  *) echo "unknown $1"; echo "  usage: $0 <oracle> <repo> [--category <id>] [--chname slash|dash] [--migrate] [--deny-main] [--dry]"; exit 2;; esac; done
+  *) echo "unknown $1"; echo "  usage: $0 <oracle> <repo> [--category <id>] [--channel <id>] [--chname slash|dash] [--migrate] [--deny-main] [--dry]"; exit 2;; esac; done
 [[ $CHNAME = (slash|dash) ]] || { echo "--chname is slash or dash, not '$CHNAME'"; echo "  $0 $oracle $repo --chname dash --dry"; exit 2; }
 FL=""; (( MIG )) && FL+=" --migrate"   # flags to repeat in a printed fix line
 GUILD=1560847800881643520
@@ -52,7 +55,7 @@ pass show discord/$oracle-token >/dev/null || { echo "no pass discord/$oracle-to
 pass show claude/token-$ctok >/dev/null || { echo "no pass claude/token-$ctok"; exit 1; }
 git -C $R check-ignore -q wt/ || { echo "wt/ is not ignored in $R: add it to .gitignore first"; echo "  echo wt/ >> $R/.gitignore && git -C $R commit -m 'ignore wt/' .gitignore"; exit 1; }
 NOTE=$W/CLAUDE.local.md
-echo "plan: channel '$CHN' (layout 9, find by name under category $CAT or create; never a second one)"
+echo "plan: channel '$CHN' (layout 9; ${CHPIN:+pinned $CHPIN, else }match '$CHN' or '<icon>・$CHN', else create '$PREFIX$CHN' under category $CAT; never a second one)"
 echo "      thread '$oracle' in it, found/reused/unarchived or opened by the $oracle bot (own thread); humans Nat + catbutter"
 echo "      worktree $W (branch soul/$oracle) · bot $oracle · claude $ctok · DISCORD_ORACLE=$oracle"
 echo "      ears: thread '$oracle', requireMention false (its own thread) · eyes: guild read-only · note: $NOTE"
@@ -78,39 +81,60 @@ if (( DENYMAIN )); then
   if [[ -z $MACH || $MACH = $HOST ]]; then echo "      deny-main: groups[channel '$CHN' id] deny+earsOff in $ML (main body here on $HOST; backup first)"
   else echo "      deny-main: main body lives on $MACH: print the herdr --machine prompt for its agent (no ssh edit)"; fi
 fi
-(( DRY )) && { echo "dry: nothing touched"; exit 0; }
-
 LT=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
 ST=$(pass show discord/$oracle-token | head -1 | tr -d '[:space:]')
 api()  { curl -sS -H "Authorization: Bot $LT" -H 'Content-Type: application/json' "$@"; }   # Laris: the channel
 sapi() { curl -sS -H "Authorization: Bot $ST" -H 'Content-Type: application/json' "$@"; }   # the soul: its thread
-# 1. channel <owner>∕<repo>: find by name anywhere in the guild; two with that name = stop (never guess, never make a third)
-CH=$(api https://discord.com/api/v10/guilds/$GUILD/channels | python3 -c 'import json,sys
-n=sys.argv[1]; hits=[c["id"] for c in json.load(sys.stdin) if c.get("type")==0 and c.get("name","").lower()==n]
-print(hits[0] if len(hits)==1 else ("MANY:"+",".join(hits) if hits else ""))' "$CHN")
-[[ $CH = MANY:* ]] && { echo "stop: more than one channel named '$CHN' (${CH#MANY:}); pick one and archive the others by hand"; exit 1; }
-if [[ -z $CH ]]; then
-  CH=$(api -X POST https://discord.com/api/v10/guilds/$GUILD/channels \
-    -d "$(python3 -c 'import json,sys;print(json.dumps({"name":sys.argv[1],"type":0,"parent_id":sys.argv[2],"topic":"repo "+sys.argv[3]+": one thread per oracle soul, each opened by its own bot"}))' "$CHN" $CAT "$full")" \
-    | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("id",""))')
-  [[ -n $CH ]] || { echo "stop: could not create channel '$CHN' (name refused?); retry with the dash name:"; echo "  $0 $oracle $repo --chname dash$FL"; exit 1; }
-  echo "channel '$CHN' created: $CH"
-else echo "channel '$CHN' found: $CH"; fi
+# 1. channel: --channel <id> pins it; else find by name anywhere in the guild. A name matches '<owner>∕<repo>' exactly or
+#    with an icon prefix ending in '・' ('📦・laris-co∕soul-in-repo', Nat's pilot 2026-11-07). Two matches = stop.
+#    Lookups are GETs, so --dry runs them too and shows what a real run would reuse.
+if [[ -n $CHPIN ]]; then
+  CH=$(api https://discord.com/api/v10/channels/$CHPIN | python3 -c 'import json,sys
+d=json.load(sys.stdin); g=sys.argv[1]
+print(d["id"] if d.get("type")==0 and d.get("guild_id")==g else "")' $GUILD)
+  [[ -n $CH ]] || { echo "stop: --channel $CHPIN is not a text channel of guild $GUILD"; echo "  $0 $oracle $repo --dry$FL   (find it by name instead)"; exit 1; }
+  echo "channel pinned: $CH"
+else
+  CH=$(api https://discord.com/api/v10/guilds/$GUILD/channels | python3 -c 'import json,sys
+n=sys.argv[1]
+def hit(c):
+    m=c.get("name","").lower()
+    return c.get("type")==0 and (m==n or m.endswith("・"+n))
+hits=[c["id"]+"="+c["name"] for c in json.load(sys.stdin) if hit(c)]
+print(hits[0].split("=")[0] if len(hits)==1 else ("MANY:"+", ".join(hits) if hits else ""))' "$CHN")
+  [[ $CH = MANY:* ]] && { echo "stop: more than one channel matches '$CHN' (${CH#MANY:}); pin one:"; echo "  $0 $oracle $repo --channel <id>$FL"; exit 1; }
+  [[ -n $CH ]] && echo "channel found: $CH"
+fi
 # 2. thread <oracle>: the soul's own bot finds it (active, then archived pages) or opens it, so the soul owns its thread
 findth() { python3 -c 'import json,sys
 d=json.load(sys.stdin); ch,n=sys.argv[1:]
 print(next((t["id"] for t in d.get("threads",[]) if t.get("parent_id")==ch and t.get("name")==n),""))' $CH "$oracle"; }
-TH=$(sapi https://discord.com/api/v10/guilds/$GUILD/threads/active | findth)
-before=""
-while [[ -z $TH ]]; do
-  page=$(sapi "https://discord.com/api/v10/channels/$CH/threads/archived/public?limit=100${before:+&before=$before}")
-  TH=$(print -r -- $page | findth)
-  [[ -n $TH ]] && break
-  before=$(print -r -- $page | python3 -c 'import json,sys
+TH=""
+if [[ -n $CH ]]; then
+  TH=$(sapi https://discord.com/api/v10/guilds/$GUILD/threads/active | findth)
+  before=""
+  while [[ -z $TH ]]; do
+    page=$(sapi "https://discord.com/api/v10/channels/$CH/threads/archived/public?limit=100${before:+&before=$before}")
+    TH=$(print -r -- $page | findth)
+    [[ -n $TH ]] && break
+    before=$(print -r -- $page | python3 -c 'import json,sys
 d=json.load(sys.stdin); t=d.get("threads",[])
 print(t[-1]["thread_metadata"]["archive_timestamp"] if d.get("has_more") and t else "")')
-  [[ -n $before ]] || break
-done
+    [[ -n $before ]] || break
+  done
+fi
+if (( DRY )); then
+  [[ -n $CH ]] || echo "channel: none yet, a real run creates '$PREFIX$CHN' under category $CAT"
+  [[ -n $TH ]] && echo "thread '$oracle': reuse $TH" || echo "thread '$oracle': none yet, the $oracle bot opens it"
+  echo "dry: nothing touched (lookups were GETs)"; exit 0
+fi
+if [[ -z $CH ]]; then
+  CH=$(api -X POST https://discord.com/api/v10/guilds/$GUILD/channels \
+    -d "$(python3 -c 'import json,sys;print(json.dumps({"name":sys.argv[1],"type":0,"parent_id":sys.argv[2],"topic":"repo "+sys.argv[3]+": one thread per oracle soul, each opened by its own bot"}))' "$PREFIX$CHN" $CAT "$full")" \
+    | python3 -c 'import json,sys;d=json.load(sys.stdin);print(d.get("id",""))')
+  [[ -n $CH ]] || { echo "stop: could not create channel '$PREFIX$CHN' (name refused?); retry with the dash name:"; echo "  $0 $oracle $repo --chname dash$FL"; exit 1; }
+  echo "channel '$PREFIX$CHN' created: $CH"
+fi
 if [[ -n $TH ]]; then
   sapi -o /dev/null -w "reuse thread $TH (unarchive) %{http_code}\n" -X PATCH https://discord.com/api/v10/channels/$TH \
     -d '{"archived":false,"auto_archive_duration":10080}'

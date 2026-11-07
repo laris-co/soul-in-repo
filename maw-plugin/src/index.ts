@@ -31,6 +31,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
 
   [repo]  owner/name, an absolute path, or empty = the git repo of this folder
   --deny-main  with in / migrate: also keep the oracle's main body out of the repo channel
+  --channel=<id>  with in / migrate: use this channel (default: find it by name, icon prefix allowed)
   --chname=dash  with in / migrate: channel <owner>-<repo> instead of <owner>∕<repo> (U+2215)
   --dry   plan only (the default for in/out/migrate)
   --yes   run it. These write access rows: only on Nat's go from a terminal.
@@ -47,8 +48,10 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const dryAsked = args.includes("--dry");
   const denyMain = args.includes("--deny-main");
   const chname = args.find(a => a.startsWith("--chname="));
+  const pin = args.find(a => a.startsWith("--channel="));
+  if (pin && !/^--channel=\d{15,22}$/.test(pin)) return { error: `${pin}: use --channel=<channel id>` };
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== chname);
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== chname && a !== pin);
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
@@ -63,9 +66,9 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const oracle = oracleName(pos[0]);
   const repo = pos.slice(1);
   const dry = !yes || dryAsked;
-  if (verb === "out" && (denyMain || chname)) return { error: "--deny-main and --chname go with in or migrate, not out" };
+  if (verb === "out" && (denyMain || chname || pin)) return { error: "--deny-main, --chname and --channel go with in or migrate, not out" };
   if (verb === "out") return { argv: ["out", oracle, ...repo, ...(dry ? [] : ["--go"])], dry };
-  const pass = [...(verb === "migrate" ? ["--migrate"] : []), ...(denyMain ? ["--deny-main"] : []), ...(chname ? [chname] : [])];
+  const pass = [...(verb === "migrate" ? ["--migrate"] : []), ...(denyMain ? ["--deny-main"] : []), ...(chname ? [chname] : []), ...(pin ? [pin] : [])];
   return { argv: ["in", oracle, ...repo, ...pass, ...(dry ? ["--dry"] : [])], dry };
 }
 

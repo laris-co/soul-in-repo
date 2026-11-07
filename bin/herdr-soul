@@ -4,7 +4,7 @@
 #   herdr-soul ls    [repo]              souls living in a repo: worktree, thread, pane, gateway ready?
 #   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
 #   herdr-soul in    <oracle> [repo]     check, then soul-in-repo.sh (channel, thread, worktree, space, Laris row, hello)
-#                                        --migrate / --deny-main / --chname=dash are passed through to soul-in-repo.sh
+#                                        --migrate / --deny-main / --chname=dash / --channel=<id> are passed through to soul-in-repo.sh
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
 # Laris rows, newest first. layout 9 (2026-11-07 06:34Z): one row per repo CHANNEL (<owner>∕<repo>), "layout": 9,
@@ -19,7 +19,7 @@ LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 DRY=0; GO=0; ARGS=(); PASS=()   # PASS = flags handed to soul-in-repo.sh by `in`
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main|--chname=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
