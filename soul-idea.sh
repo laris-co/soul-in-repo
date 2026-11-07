@@ -27,7 +27,8 @@ for a in "$@"; do case $a in
 [[ -z $CHPIN || $CHPIN = <-> ]] || { echo "--channel=<channel id>, not $CHPIN"; exit 2; }
 HERE=${0:A:h}
 GUILD=1560847800881643520; NAT=691531480689541170; CB=917019242094817301
-CAT=${SOUL_CATEGORY:-1560847801838215259}
+CAT=${SOUL_CATEGORY:-1560847801838215259}          # idea channels: 🔬・research until Nat names an ideas category
+REPOCAT=${SOUL_REPO_CATEGORY:-1568651567144374314}  # 📦 repos: where convert moves the channel
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
 L=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}
 S=${HERDR_SESSION:-laris-co}
@@ -205,7 +206,7 @@ echo "convert: idea '$IDEA' -> repo $REPO · channel $CH · souls: ${(j:, :)${(@
 cur=$(api https://discord.com/api/v10/channels/$CH | python3 -c 'import json,sys;print(json.load(sys.stdin).get("name","?"))')
 exists=$(gh repo view $REPO --json name -q .name 2>/dev/null || true)
 echo "  1. repo: ${exists:+exists on GitHub}${exists:-gh repo create $REPO --$( (( PRIV )) && echo private || echo public) --add-readme}; ghq get $REPO -> $R; wt/ in .gitignore"
-echo "  2. channel $CH: rename '#$cur' -> '$NEWN' (same id, history kept)"
+echo "  2. channel $CH: rename '#$cur' -> '$NEWN' and move it to category $REPOCAT (📦 repos); same id, history kept"
 n=3
 for p in $pairs; do
   o=${p%%=*}; th=${p#*=}; soul=$(soul_dir $o)
@@ -227,8 +228,8 @@ if ! git -C $R check-ignore -q wt/; then
   echo wt/ >> $R/.gitignore && git -C $R add .gitignore && git -C $R commit -qm "ignore wt/ (soul worktrees)" && git -C $R push -q && echo "  ✓ wt/ ignored in $REPO"
 fi
 # 2. channel rename
-api -o /dev/null -w "  ✓ channel rename -> '$NEWN' %{http_code}\n" -X PATCH https://discord.com/api/v10/channels/$CH \
-  -d "$(python3 -c 'import json,sys;print(json.dumps({"name":sys.argv[1],"topic":"repo "+sys.argv[2]+" (was idea "+sys.argv[3]+"): one thread per oracle soul"}))' "$NEWN" $REPO $IDEA)"
+api -o /dev/null -w "  ✓ channel rename -> '$NEWN', category $REPOCAT %{http_code}\n" -X PATCH https://discord.com/api/v10/channels/$CH \
+  -d "$(python3 -c 'import json,sys;print(json.dumps({"name":sys.argv[1],"parent_id":sys.argv[4],"topic":"repo "+sys.argv[2]+" (was idea "+sys.argv[3]+"): one thread per oracle soul"}))' "$NEWN" $REPO $IDEA $REPOCAT)"
 # 3. souls
 for p in $pairs; do
   o=${p%%=*}; soul=$(soul_dir $o); B=$soul/ψ/lab/$IDEA

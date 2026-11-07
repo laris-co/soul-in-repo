@@ -21,7 +21,7 @@
 # Runs on the machine of the Laris host bot (m5 today). Tokens only from pass, never printed.
 set -euo pipefail
 oracle=${1:?oracle}; repo=${2:?repo}; shift 2
-CAT=${SOUL_CATEGORY:-1560847801838215259}   # 🔬・research category
+CAT=${SOUL_CATEGORY:-1568651567144374314}   # 📦 repos category (Nat 2026-11-07 'organize'; was 🔬・research 1560847801838215259)
 CHNAME=${CHNAME:-slash}
 PREFIX=${SOUL_CHPREFIX-📦・}   # icon prefix for a NEW channel (Nat's pilot room); SOUL_CHPREFIX= for none
 CHPIN=""
