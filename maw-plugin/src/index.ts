@@ -47,6 +47,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
                                         thread <name> in the repo's layout-9 channel (--channel=<id>), forward row,
                                         claude beside the bot body. --bot=<oracle> (default laris-labs-oracle).
                                         Last line on success: RESULT thread=<id> pane=<pane> wt=<path>
+                                        --thread=<id>: use that EXISTING thread of the repo channel (no new post)
   maw soul wt-close  <name> [repo]      plan; unlink it and archive the thread, the worktree stays
   maw soul link      <wt-path>          plan; a manual worktree joins an existing bot body by forward (no second gateway):
                                         thread opened by the bot, forward row in its access, claude in the wt beside it.
@@ -83,7 +84,7 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const all = args.includes("--all");
   if (pin && !/^--channel=\d{15,22}$/.test(pin)) return { error: `${pin}: use --channel=<channel id>` };
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
-  const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel)=/.test(a));
+  const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel|thread)=/.test(a));
   const ideaOpts = args.filter(a => /^--(dir|repo)=/.test(a) || a === "--public" || a === "--private");
   const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a));
   const verb = rest[0] ?? "ls";
@@ -103,7 +104,9 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
     if (!name || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) return { error: `which name?\n  maw soul ${verb} <name> [repo]` };
     if (pos.length > 2) return { error: `maw soul ${verb} <name> [repo]: one repo at most` };
     if (denyMain || chname || ideaOpts.length) return { error: `--deny-main, --chname, --dir, --repo do not go with ${verb}` };
-    if (linkOpts.some(a => !/^--(bot|pane)=/.test(a)) || (verb === "wt-close" && (pin || linkOpts.some(a => a.startsWith("--pane="))))) return { error: `${verb} takes --bot=<oracle>${verb === "wt" ? ", --pane=<id> and --channel=<id>" : ""}` };
+    if (linkOpts.some(a => !/^--(bot|pane|thread)=/.test(a)) || (verb === "wt-close" && (pin || linkOpts.some(a => /^--(pane|thread)=/.test(a))))) return { error: `${verb} takes --bot=<oracle>${verb === "wt" ? ", --pane=<id>, --channel=<id> and --thread=<id>" : ""}` };
+    const th = linkOpts.find(a => a.startsWith("--thread="));
+    if (th && !/^--thread=\d{15,22}$/.test(th)) return { error: `${th}: use --thread=<thread id>` };
     const d = !yes || dryAsked;
     return { argv: [verb, name, ...pos.slice(1), ...linkOpts, ...(pin ? [pin] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
   }
@@ -127,6 +130,9 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   if (verb === "link" || verb === "unlink") {
     if (!pos[0]) return { error: `which worktree?\n  maw soul ${verb} <wt-path> [--bot=<oracle>] [--yes]` };
     if (denyMain || chname) return { error: `--deny-main and --chname do not go with ${verb}` };
+    const thr = linkOpts.find(a => a.startsWith("--thread="));
+    if (thr && !/^--thread=\d{15,22}$/.test(thr)) return { error: `${thr}: use --thread=<thread id>` };
+    if (thr && linkOpts.some(a => a.startsWith("--whole-channel="))) return { error: "--whole-channel and --thread: pick one" };
     if (verb === "unlink" && (pin || linkOpts.some(a => !/^--(bot|whole-channel)=/.test(a)))) return { error: "unlink takes only --bot=<oracle> and --whole-channel=<id>" };
     const whole = linkOpts.find(a => a.startsWith("--whole-channel="));
     if (whole && !/^--whole-channel=\d{15,22}$/.test(whole)) return { error: `${whole}: use --whole-channel=<channel id>` };

@@ -23,6 +23,8 @@
 #   herdr-soul wt    <name> [repo] [--channel=<id>] [--bot=<oracle>] [--yes]   a named worktree <repo>/wt/<name> (branch
 #                                        wt/<name>, reused if there) joined by forward like link; default bot laris-labs-oracle,
 #                                        default channel the repo's layout-9 channel. Last line: RESULT thread= pane= wt=
+#                                        --thread=<id> (link and wt): use that EXISTING thread of the repo channel (unarchived
+#                                        if needed, no new post), refused if it forwards to another worktree.
 #   herdr-soul wt-close <name> [repo] [--bot=<oracle>] [--yes]   unlink it and archive the thread; the worktree stays.
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
@@ -41,8 +43,8 @@ LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 EARS_BIN=${HERDR_SOUL_EARS:-$HERE/soul-ears}
-DRY=0; GO=0; YES=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; BOTSET=0; NAME=""; BPANE=""; WHOLE=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle; BOTSET=1;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --dir=*|--repo=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+DRY=0; GO=0; YES=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; BOTSET=0; NAME=""; BPANE=""; WHOLE=""; THPIN=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle; BOTSET=1;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --thread=*) THPIN=${a#*=};; --dir=*|--repo=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -299,8 +301,8 @@ wt|wt-close)
     echo "  ✓ worktree $W (branch wt/$name)"
   fi
   [[ -d $W ]] || export HERDR_SOUL_PLANNED_WT=$R   # dry: link plans for a worktree that is not there yet
-  export HERDR_SOUL_RERUN="herdr-soul wt $name $(repo_full $R)${PASS:+ $PASS} --bot=$BOT --yes"
-  exec $0 link $W $fl --name=${NAME:-$name} $PASS ${BPANE:+--pane=$BPANE}
+  export HERDR_SOUL_RERUN="herdr-soul wt $name $(repo_full $R)${PASS:+ $PASS}${THPIN:+ --thread=$THPIN} --bot=$BOT --yes"
+  exec $0 link $W $fl --name=${NAME:-$name} $PASS ${BPANE:+--pane=$BPANE} ${THPIN:+--thread=$THPIN}
   ;;
 
 link|unlink)
@@ -356,6 +358,7 @@ json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $existing $W
   pin=${PASS[(r)--channel=*]:-}; CH=${pin#--channel=}
   [[ -z $WHOLE || $WHOLE = <-> ]] || { echo "--whole-channel=<channel id>, not $WHOLE"; exit 2; }
   [[ -n $WHOLE && -n $CH ]] && { echo "--whole-channel and --channel: pick one"; exit 2; }
+  [[ -n $WHOLE && -n $THPIN ]] && { echo "--whole-channel and --thread: pick one"; exit 2; }
   [[ -n $WHOLE ]] && CH=$WHOLE
   if [[ -z $CH ]]; then  # the layout-9 channel of the worktree's repo, from Laris's rows
     if [[ -d $W ]]; then full=$(repo_full $(git -C $W rev-parse --path-format=absolute --git-common-dir | xargs dirname))
@@ -423,6 +426,46 @@ for t in deny:
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $CH $W $ANS $chname $deny
     echo "  ✓ row $CH + ${#deny} deny rows in $ACC (backup beside it)"
     TH=$CH
+  elif [[ -n $THPIN ]]; then
+    # Nat 2026-11-08 "go here" (via Laris): join an EXISTING thread of the repo channel instead of opening one
+    [[ $THPIN = <-> ]] || { echo "--thread=<thread id>, not $THPIN"; exit 2; }
+    info=$(DISCORD_TOKEN="$(pass show discord/$BOT-token | head -1 | tr -d '[:space:]')" python3 - $THPIN <<'PYT'
+import json,os,sys,urllib.request
+r=urllib.request.Request("https://discord.com/api/v10/channels/"+sys.argv[1],headers={"Authorization":"Bot "+os.environ["DISCORD_TOKEN"],"User-Agent":"herdr-soul (laris-co/soul-in-repo, 1)"})
+try: c=json.load(urllib.request.urlopen(r,timeout=20))
+except Exception as e: print("ERR cannot read thread %s: %s" % (sys.argv[1],e)); sys.exit()
+if c.get("type") not in (10,11,12): print("ERR %s is not a thread (type %s)" % (sys.argv[1],c.get("type"))); sys.exit()
+print(c.get("parent_id",""), "archived" if c.get("thread_metadata",{}).get("archived") else "open", c.get("name",""))
+PYT
+)
+    [[ $info = ERR* ]] && { echo "stop: ${info#ERR }"; exit 1; }
+    tparent=${info%% *}; rest=${info#* }; tstate=${rest%% *}; tname=${rest#* }
+    [[ $tparent = $CH ]] || { echo "stop: thread $THPIN ('$tname') is in channel $tparent, not the repo channel $CH"; exit 1; }
+    other=$(python3 -c 'import json,sys
+g=json.load(open(sys.argv[1])).get("groups",{}).get(sys.argv[2],{}); f=g.get("forwardTo","")
+print(f if f and f!=sys.argv[3] else "")' $ACC $THPIN $W)
+    [[ -z $other ]] || { echo "stop: thread $THPIN already forwards to another worktree: $other (wt-close/unlink it first)"; exit 1; }
+    hasrow=$(python3 -c 'import json,sys;print("yes" if sys.argv[2] in json.load(open(sys.argv[1])).get("groups",{}) else "no")' $ACC $THPIN)
+    echo "plan: link $W -> $BOT by forward on EXISTING thread '$tname' ($THPIN, $tstate) in channel $CH"
+    [[ $tstate = archived ]] && echo "  1. unarchive thread $THPIN (as $BOT); no new post, no new thread" || echo "  1. thread is open; no new post, no new thread"
+    echo "  2. back up $ACC, ${${hasrow:#yes}:+add}${${hasrow:#no}:+update} groups[$THPIN] = {requireMention: false, forwardTo: $W,"
+    echo "       answerCmd: \"$ANS\", allowFrom: [Nat, catbutter]}${${hasrow:#no}:+ (other keys of the existing row kept)}"
+    echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
+    echo "  4. test: Nat types a line in '$tname'; the $BOT body forwards it to that pane, which answers with answerCmd"
+    (( run )) || { echo "plan only. To run (Nat's go): ${HERDR_SOUL_RERUN:-herdr-soul link $W --bot=$BOT${pin:+ $pin} --thread=$THPIN --yes}"; exit 0; }
+    if [[ $tstate = archived ]]; then
+      T=$(pass show discord/$BOT-token | head -1 | tr -d '[:space:]')
+      curl -sS -o /dev/null -w "  ✓ unarchive $THPIN %{http_code}\n" -X PATCH -H "Authorization: Bot $T" -H 'Content-Type: application/json' \
+        -d '{"archived":false}' https://discord.com/api/v10/channels/$THPIN
+    fi
+    TH=$THPIN
+    cp -p $ACC $ACC.bak-$(date +%Y%m%d-%H%M%S)-link
+    python3 -c 'import json,sys
+f,th,w,ans,n=sys.argv[1:]; a=json.load(open(f)); r=a.setdefault("groups",{}).setdefault(th,{})
+r.update({"requireMention":False,"forwardTo":w,"answerCmd":ans,"allowFrom":["691531480689541170","917019242094817301"]})
+r.setdefault("note","link: existing thread %s forwards to worktree %s (herdr-soul link --thread)" % (n,w))
+json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $TH $W $ANS "$tname"
+    echo "  ✓ row $TH in $ACC (backup beside it)"
   else
   echo "plan: link $W -> $BOT by forward (no second gateway)"
   echo "  1. as $BOT: post '🔗 $NAME' in channel $CH, open thread '$NAME' on it ($SAY --thread)"
