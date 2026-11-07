@@ -113,3 +113,14 @@ test("convert: --repo required, souls come from the Laris row", () => {
   expect("error" in plan(["convert", "fake-idea", "--repo=nope"])).toBe(true);
   expect("error" in plan(["convert", "fake-idea", "neo", "--repo=a/b"])).toBe(true);
 });
+
+test("wt / wt-close: named worktree joined by forward, plan unless --yes", () => {
+  expect(plan(["wt", "test-wt", "laris-co/00_mz_forwarder"])).toEqual({ argv: ["wt", "test-wt", "laris-co/00_mz_forwarder", "--dry"], dry: true });
+  expect(plan(["wt", "fix-1", "--channel=1568518331600867338", "--bot=somsri", "--yes"])).toEqual({ argv: ["wt", "fix-1", "--bot=somsri", "--channel=1568518331600867338", "--yes"], dry: false });
+  expect(plan(["wt-close", "fix-1", "laris-co/x", "--yes"])).toEqual({ argv: ["wt-close", "fix-1", "laris-co/x", "--yes"], dry: false });
+  expect("error" in plan(["wt"])).toBe(true);
+  expect("error" in plan(["wt", "bad name"])).toBe(true);
+  expect("error" in plan(["wt", "a", "b", "c"])).toBe(true);
+  expect("error" in plan(["wt", "a", "--name=x"])).toBe(true);
+  expect("error" in plan(["wt-close", "a", "--channel=1568518331600867338"])).toBe(true);
+});

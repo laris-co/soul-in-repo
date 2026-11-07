@@ -11,6 +11,8 @@
 //   maw soul room    <repo> <oracle>...    layout 9 for many souls: migrate a live body, else in; always --deny-main
 //   maw soul idea    <idea> <oracle>...    IDEA MODE: channel 💡・<idea>, a thread per soul, body = scratch dir
 //   maw soul convert <idea> --repo=o/r     idea -> repo: same channel (renamed 📦・o∕r), same threads, wt bodies
+//   maw soul wt      <name> [repo]         worktree <repo>/wt/<name> + link (default bot laris-labs-oracle)
+//   maw soul wt-close <name> [repo]        unlink it, archive the thread, keep the worktree
 //   maw soul link    <wt-path>             a manual worktree joins an existing bot body by forward (no second gateway)
 //   maw soul unlink  <wt-path>             archive its thread, drop the forward row (--whole-channel: + its deny rows)
 //   maw soul ears    <oracle> [repo] [ls]  threads the body hears; add|rm <thread> [--all]: plan, --yes writes
@@ -41,6 +43,11 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
                                         (its own bot), body <soul>/ψ/lab/<idea> (--dir=<base>), Laris row mode idea
   maw soul convert   <idea> --repo=<owner/repo> [--public]   plan; the idea becomes a repo (private by default):
                                         channel renamed 📦・<owner>∕<repo>, each soul rebuilt in <repo>/wt on the SAME thread
+  maw soul wt        <name> [repo]      plan; worktree <repo>/wt/<name> (branch wt/<name>, reused if there), then link:
+                                        thread <name> in the repo's layout-9 channel (--channel=<id>), forward row,
+                                        claude beside the bot body. --bot=<oracle> (default laris-labs-oracle).
+                                        Last line on success: RESULT thread=<id> pane=<pane> wt=<path>
+  maw soul wt-close  <name> [repo]      plan; unlink it and archive the thread, the worktree stays
   maw soul link      <wt-path>          plan; a manual worktree joins an existing bot body by forward (no second gateway):
                                         thread opened by the bot, forward row in its access, claude in the wt beside it.
                                         --bot=<oracle> (default somsri-oracle) --channel=<id> --name=<thread> --pane=<id>
@@ -61,7 +68,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   --yes   run it. These write access rows: only on Nat's go from a terminal.
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
-const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert"]);
+const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close"]);
 const READS = new Set(["list", "ls", "check"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
@@ -91,6 +98,15 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
     return { argv: [verb, ...pos], dry: false };
   }
   if (!WRITES.has(verb)) return { error: `unknown verb ${verb}\n  maw soul help` };
+  if (verb === "wt" || verb === "wt-close") {
+    const name = pos[0];
+    if (!name || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) return { error: `which name?\n  maw soul ${verb} <name> [repo]` };
+    if (pos.length > 2) return { error: `maw soul ${verb} <name> [repo]: one repo at most` };
+    if (denyMain || chname || ideaOpts.length) return { error: `--deny-main, --chname, --dir, --repo do not go with ${verb}` };
+    if (linkOpts.some(a => !/^--(bot|pane)=/.test(a)) || (verb === "wt-close" && (pin || linkOpts.some(a => a.startsWith("--pane="))))) return { error: `${verb} takes --bot=<oracle>${verb === "wt" ? ", --pane=<id> and --channel=<id>" : ""}` };
+    const d = !yes || dryAsked;
+    return { argv: [verb, name, ...pos.slice(1), ...linkOpts, ...(pin ? [pin] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+  }
   if (linkOpts.length && verb !== "link" && verb !== "unlink") return { error: "--bot, --name and --pane go with link / unlink" };
   if (ideaOpts.length && verb !== "idea" && verb !== "convert") return { error: "--dir, --repo, --public and --private go with idea / convert" };
   if (verb === "idea" || verb === "convert") {
