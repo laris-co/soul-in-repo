@@ -1,0 +1,98 @@
+// maw soul: put an oracle's soul to work inside another repo, from any folder.
+// A thin front. Every verb runs bin/herdr-soul (which runs soul-in-repo.sh for `in`); no logic is copied here,
+// so maw soul, /herdr-soul and the herdr plugin laris.soul always do the same thing.
+//
+//   maw soul list                          oracles that can come in
+//   maw soul ls      [repo]                souls of a repo (default: the repo of the current folder)
+//   maw soul check   <oracle> [repo]       preflight, changes nothing, prints the fix for each failed item
+//   maw soul in      <oracle> [repo]       plan; --yes brings the soul in
+//   maw soul out     <oracle> [repo]       plan; --yes takes it out (herdr-soul out --go)
+//   maw soul migrate <oracle> [repo]       plan; --yes moves a LIVE body to #repo (soul-in-repo.sh --migrate)
+//   --deny-main on in / migrate: also keep the oracle's main body out of #repo (soul-in-repo.sh --deny-main)
+//
+// in / out / migrate write access rows. Without --yes they only print the plan (--dry), so an agent
+// that runs them by mistake changes nothing. Run them with --yes only on Nat's go from a terminal.
+import { spawnSync } from "node:child_process";
+import { existsSync, realpathSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+type InvokeContext = { source: "cli" | string; args: string[] };
+type PluginResult = { ok: boolean; output?: string; error?: string };
+
+const HELP = `maw soul — an oracle's soul at work inside another repo (front for bin/herdr-soul)
+
+  maw soul list                         oracles that can come in (soul, token, machine, where they are)
+  maw soul ls        [repo]             souls of a repo: thread, pane, gateway ready?
+  maw soul check     <oracle> [repo]    preflight only; prints the fix for each failed item
+  maw soul in        <oracle> [repo]    plan; add --yes to bring the soul in
+  maw soul out       <oracle> [repo]    plan; add --yes to take it out
+  maw soul migrate   <oracle> [repo]    plan; add --yes to move a live body to #repo › <owner>/<repo>
+
+  [repo]  owner/name, an absolute path, or empty = the git repo of this folder
+  --deny-main  with in / migrate: also keep the oracle's main body out of #repo
+  --dry   plan only (the default for in/out/migrate)
+  --yes   run it. These write access rows: only on Nat's go from a terminal.
+  HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
+
+const WRITES = new Set(["in", "out", "migrate"]);
+const READS = new Set(["list", "ls", "check"]);
+
+const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
+
+// herdr-soul argv for a maw soul call, or an error. Pure, so it is tested without running anything.
+export function plan(args: string[]): { argv: string[]; dry: boolean } | { error: string } {
+  const yes = args.includes("--yes");
+  const dryAsked = args.includes("--dry");
+  const denyMain = args.includes("--deny-main");
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main");
+  const verb = rest[0] ?? "ls";
+  const pos = rest.slice(1);
+  const unknown = pos.find(a => a.startsWith("--"));
+  if (unknown) return { error: `unknown flag ${unknown}\n  maw soul help` };
+  if (READS.has(verb)) {
+    if (verb === "check" && !pos[0]) return { error: "which oracle?\n  maw soul check <oracle> [repo]" };
+    if (verb === "check") return { argv: ["check", oracleName(pos[0]!), ...pos.slice(1)], dry: false };
+    return { argv: [verb, ...pos], dry: false };
+  }
+  if (!WRITES.has(verb)) return { error: `unknown verb ${verb}\n  maw soul help` };
+  if (!pos[0]) return { error: `which oracle?\n  maw soul ${verb} <oracle> [repo]` };
+  const oracle = oracleName(pos[0]);
+  const repo = pos.slice(1);
+  const dry = !yes || dryAsked;
+  if (verb === "out" && denyMain) return { error: "--deny-main goes with in or migrate, not out" };
+  if (verb === "out") return { argv: ["out", oracle, ...repo, ...(dry ? [] : ["--go"])], dry };
+  const pass = [...(verb === "migrate" ? ["--migrate"] : []), ...(denyMain ? ["--deny-main"] : [])];
+  return { argv: ["in", oracle, ...repo, ...pass, ...(dry ? ["--dry"] : [])], dry };
+}
+
+export function herdrSoul(): string {
+  if (process.env.HERDR_SOUL_BIN) return process.env.HERDR_SOUL_BIN;
+  const here = dirname(realpathSync(import.meta.path));
+  return join(here, "..", "..", "bin", "herdr-soul");
+}
+
+export async function handler(ctx: InvokeContext): Promise<PluginResult> {
+  const args = ctx.args ?? [];
+  if (["help", "-h", "--help"].includes(args[0] ?? "")) return { ok: true, output: HELP };
+  const p = plan(args);
+  if ("error" in p) return { ok: false, error: p.error };
+  const bin = herdrSoul();
+  if (!existsSync(bin)) return { ok: false, error: `herdr-soul not found at ${bin}\n  HERDR_SOUL_BIN=/opt/Code/github.com/laris-co/soul-in-repo/bin/herdr-soul maw soul ${args.join(" ")}` };
+  // stdio inherited: the human sees soul-in-repo.sh's steps live, and its prompts still work
+  const r = spawnSync("zsh", [bin, ...p.argv], { stdio: "inherit" });
+  if (r.error) return { ok: false, error: `cannot run zsh: ${r.error.message}` };
+  const verb = p.argv[0];
+  const tail = p.dry && WRITES.has(args.find(a => !a.startsWith("--")) ?? "")
+    ? `\nplan only. To run it (Nat's go, from a terminal):\n  maw soul ${args.filter(a => a !== "--dry").join(" ")} --yes`
+    : "";
+  return r.status === 0 ? { ok: true, output: tail.trim() || undefined } : { ok: false, error: `herdr-soul ${verb} exited ${r.status}` };
+}
+
+export default handler;
+
+if (import.meta.main) {
+  const result = await handler({ source: "cli", args: process.argv.slice(2) });
+  if (result.output) console.log(result.output);
+  if (result.error) console.error(result.error);
+  process.exit(result.ok ? 0 : 1);
+}
