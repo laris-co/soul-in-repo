@@ -198,8 +198,13 @@ PY
 fi
 if (( MIG )); then
   echo "done: migrated $oracle to #$CHN ($CH) > $full ($TH) · $W"
-  echo "the live claude still runs the OLD files: quit it in pane ${P:-<pane>} (/exit), then"
-  echo "restart: herdr pane run ${P:-<pane>} 'RESUME=1 $W/.discord/launch.sh'"
+  echo "the live claude still runs the OLD files. Restart it in pane ${P:-<pane>}, one step at a time:"
+  echo "  1. post a short 'restarting' note in thread $TH"
+  echo "  2. herdr agent prompt ${P:-<pane>} '/exit'"
+  echo "  3. herdr pane wait-output ${P:-<pane>} --regex 'took [0-9]+[hms]' --source visible --lines 2 --timeout 30000"
+  echo "     (bottom 2 lines only: claude's status bar while it runs, the fresh prompt after exit; timeout = stop, read the pane, send nothing)"
+  echo "  4. restart: herdr pane run ${P:-<pane>} 'RESUME=1 $W/.discord/launch.sh'"
+  echo "  5. herdr pane wait-output ${P:-<pane>} --regex 'bypass permissions' --source visible --lines 3 --timeout 60000   (claude is back)"
   exit 0
 fi
 echo "done: #$CHN ($CH) > $full ($TH) · $W · pane $P"
