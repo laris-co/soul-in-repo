@@ -39,8 +39,8 @@ bin/herdr-soul ears <oracle> [repo] [ls | add <thread> [--all] | rm <thread>] [-
 
 Skill: `skills/herdr-soul/SKILL.md` (install: `ln -s <this repo>/skills/herdr-soul ~/.claude/skills/herdr-soul`).
 `in` calls `check`, then `soul-in-repo.sh`. `in` and `out --go` touch the Laris access file: terminal go only.
-`ls` and `ears` show every thread a body hears (access.json + joined.json): its own layout-9 thread first, office
-("every line (joined)" when it joined on a tag), old #repo rows last. `ears add|rm` is a plan unless `--go`; it runs
+`ls` lists every room row of each soul, layout-9 thread first (#9). `ears <oracle>` shows the same body's threads
+with joined.json too (office is "every line (joined)" when it joined on a tag), old #repo rows last. `ears add|rm` is a plan unless `--go`; it runs
 `bin/soul-ears` (Somsri Oracle's tool, copied unchanged) on that body's own access.json, backup `.bak-<ts>-ears` first.
 
 `in` also passes `--migrate`, `--deny-main` and `--chname=dash` through to `soul-in-repo.sh` (with `--migrate` it skips `check`, since the body is already in).
