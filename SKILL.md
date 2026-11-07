@@ -63,6 +63,13 @@ Run it on the machine where the body should live. For a body on white, ask white
 | the soul body cannot read another room ("channel ... is not allowlisted"), Nat: "this not cool?" | ears narrow, eyes wide: the body reads any room its bot sees with `maw atlas read <id>` (token already in env); answers stay in its own thread. Written into CLAUDE.local.md by the script (2026-11-06) |
 | humans not in the new thread | the script PUTs Nat + catbutter as thread members (Nat: "When new thread add human"); a 429 means retry later |
 
+## Since 2026-11-07
+
+- `/herdr-soul` (verbs list / ls / check / in / out, `bin/herdr-soul`) wraps this script; the herdr plugin
+  `laris.soul` wraps `/herdr-soul`. This file stays the reference for the model and the traps.
+- Every live soul body has the guild eyes-only row (5 older bodies added 2026-11-07, backups `.bak-20261107-eyes`;
+  white bodies did it themselves via herdr --machine).
+
 ## Undo
 
 Close the pane, remove the Laris row (backup is beside access.local.json), `git worktree remove <wt>` after its

@@ -1,0 +1,25 @@
+id = "laris.soul"
+name = "Soul in repo"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Bring an oracle's soul into this repo (channel = soul, thread = repo) — wraps bin/herdr-soul"
+platforms = ["linux", "macos"]
+
+# Interactive: list oracles, pick one, check, show the plan, confirm, bring it in.
+# A popup can read stdin; a plain action cannot, so the entry points are panes.
+# Pressing Go here is a human at the terminal, which is what an access row needs.
+[[panes]]
+id = "bring"
+title = "Bring a soul into this repo"
+placement = "popup"
+width = "90%"
+height = "90%"
+command = ["zsh", "soul.sh", "bring"]
+
+[[panes]]
+id = "souls"
+title = "Souls in this repo"
+placement = "popup"
+width = "90%"
+height = 16
+command = ["zsh", "soul.sh", "ls"]

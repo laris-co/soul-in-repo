@@ -50,3 +50,18 @@ comes from the oracle's bot name. `ls` shows the pane and the gateway state.
 - The soul comes from `oracles/<oracle>/config.yaml` `soul:`; `soul-in-repo.sh` honours `HERDR_SOUL_DIR`.
 - `in` runs where the body should live (m5 today). For white, ask white's agent to run it.
 - `out` never removes the worktree; it prints the `git worktree remove` line with the unpushed count.
+
+## herdr plugin `laris.soul` (2026-11-07)
+
+`plugin/herdr-plugin.toml` + `plugin/soul.sh`, linked with `herdr plugin link <repo>/plugin`.
+
+- pane **bring**: lists oracles with soul ✓ and token ✓, asks which, runs `check`, shows the `--dry` plan,
+  asks `Go? [y/N]`, then `in`. A human pressing y in herdr is a terminal go.
+- pane **souls**: `ls` for the repo of the focused pane.
+- The repo comes from `HERDR_PLUGIN_CONTEXT_JSON` (focused pane cwd → git common dir), so it works
+  from inside a worktree too.
+- Popups target the active pane only: open from the herdr UI, or from the CLI with
+  `herdr plugin pane open --plugin laris.soul --entrypoint souls --placement tab --workspace <ws>`.
+
+Trap met while building it: macOS `/usr/bin/awk` compares `"✗" == "✓"` as true (collation), so a
+filter on ✓ let everything through. Filters on these marks are done in python.
