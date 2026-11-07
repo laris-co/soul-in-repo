@@ -8,6 +8,7 @@
 //   maw soul in      <oracle> [repo]       plan; --yes brings the soul in
 //   maw soul out     <oracle> [repo]       plan; --yes takes it out (herdr-soul out --go)
 //   maw soul migrate <oracle> [repo]       plan; --yes moves a LIVE body to #repo (soul-in-repo.sh --migrate)
+//   maw soul room    <repo> <oracle>...    layout 9 for many souls: migrate a live body, else in; always --deny-main
 //   --deny-main / --chname=dash on in / migrate: passed to soul-in-repo.sh (layout 9: channel per repo,
 //   thread per oracle)
 //
@@ -28,6 +29,8 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   maw soul in        <oracle> [repo]    plan; add --yes to bring the soul in
   maw soul out       <oracle> [repo]    plan; add --yes to take it out
   maw soul migrate   <oracle> [repo]    plan; add --yes to move a live body to its own thread in <owner>∕<repo>
+  maw soul room      <repo> <oracle>... plan for many souls at once (migrate a live body, else in; always --deny-main);
+                                        --channel=<id> reuses an existing room; add --yes to run
 
   [repo]  owner/name, an absolute path, or empty = the git repo of this folder
   --deny-main  with in / migrate: also keep the oracle's main body out of the repo channel
@@ -37,7 +40,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   --yes   run it. These write access rows: only on Nat's go from a terminal.
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
-const WRITES = new Set(["in", "out", "migrate"]);
+const WRITES = new Set(["in", "out", "migrate", "room"]);
 const READS = new Set(["list", "ls", "check"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
@@ -62,6 +65,12 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
     return { argv: [verb, ...pos], dry: false };
   }
   if (!WRITES.has(verb)) return { error: `unknown verb ${verb}\n  maw soul help` };
+  if (verb === "room") {
+    if (pos.length < 2) return { error: "which repo and oracles?\n  maw soul room <repo> <oracle>... [--channel=<id>] [--yes]" };
+    if (denyMain || chname) return { error: "room always passes --deny-main; --chname is for in / migrate" };
+    const dryRoom = !yes || dryAsked;
+    return { argv: ["room", pos[0]!, ...pos.slice(1).map(oracleName), ...(pin ? [pin] : []), dryRoom ? "--dry" : "--yes"], dry: dryRoom };
+  }
   if (!pos[0]) return { error: `which oracle?\n  maw soul ${verb} <oracle> [repo]` };
   const oracle = oracleName(pos[0]);
   const repo = pos.slice(1);
