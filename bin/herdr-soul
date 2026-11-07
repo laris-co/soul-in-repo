@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# herdr-soul — one tool, five verbs: put an oracle's soul to work inside another repo.
+# herdr-soul — one tool, six verbs: put an oracle's soul to work inside another repo.
 #   herdr-soul list                      oracles that can come in (soul, Discord token, Claude token, machine, where they already are)
 #   herdr-soul ls    [repo]              souls living in a repo: worktree, thread, pane, gateway ready?
 #   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
@@ -7,6 +7,9 @@
 #                                        --migrate / --deny-main / --chname=dash / --channel=<id> are passed through to soul-in-repo.sh
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
+#   herdr-soul ears  <oracle> [repo] [ls]                   threads the soul's body hears (access.json + joined.json)
+#   herdr-soul ears  <oracle> [repo] add|rm <thread> [--all] plan; --go writes the body's own access.json via bin/soul-ears
+#                                        (backup .bak-<ts>-ears first; rm keeps the entry under "removed")
 # Laris rows, newest first. layout 9 (2026-11-07 06:34Z): one row per repo CHANNEL (<owner>∕<repo>), "layout": 9,
 # souls[] + threads{oracle: thread}. #repo layout (morning of 2026-11-07): one row per #repo thread, souls[]. Old rows
 # ('<oracle> soul in <repo>') still count until the body is migrated. Notes starting 'moved to' are history, never live.
@@ -18,8 +21,9 @@ TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
 LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}   # override for tests
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
-DRY=0; GO=0; ARGS=(); PASS=()   # PASS = flags handed to soul-in-repo.sh by `in`
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+EARS_BIN=${HERDR_SOUL_EARS:-$HERE/soul-ears}
+DRY=0; GO=0; ARGS=(); PASS=(); EARS=()   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; --all) EARS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -54,6 +58,39 @@ for th,v in g.items():
     if m: print(th,"old",m.group(1).lower().removesuffix("-oracle")+"-oracle",m.group(2))
 PY
 }
+threads_of() {  # $1 = body .discord dir, $2 = oracle; one line per heard thread: <id> <own|-> <mode> <label>
+  # own thread = the Laris layout-9 row's threads{oracle}, else the row noted 'layout 9', else the first row.
+  # WHERE (env) = rows() output, so old #repo rows are labelled from Laris, not guessed.
+  WHERE=$where_all python3 - "$1" "$2" <<'PY3'
+import json,os,sys
+d,o=sys.argv[1:]
+try: g=json.load(open(os.path.join(d,"access.json"))).get("groups",{})
+except Exception: g={}
+try:
+    j=json.load(open(os.path.join(d,"joined.json"))); joined=[str(x) for x in (j if isinstance(j,list) else j.keys())]
+except Exception: joined=[]
+lay={}
+for ln in os.environ.get("WHERE","").splitlines():
+    p=ln.split()
+    if len(p)>=3 and p[2]==o: lay[p[0]]=p[1]
+own=next((t for t,l in lay.items() if l=="l9" and t in g),None) \
+    or next((t for t,v in g.items() if "layout 9" in v.get("note","")),None) or next(iter(g),None)
+def mode(t,v):
+    if v.get("requireMention") is False: return "every-line"
+    return "every-line(joined)" if t in joined else "tag-only"
+def label(t,v):
+    n=v.get("note","").lower()
+    if t==own: return "own thread (layout 9)" if (lay.get(t)=="l9" or "layout 9" in n) else "own thread"
+    if lay.get(t)=="repo": return "old #repo thread (#repo layout)"
+    if lay.get(t)=="old": return "old thread (old layout)"
+    return "office" if "office" in n else "other"
+rest=[t for t in g if t!=own]
+rest.sort(key=lambda t: lay.get(t) in ("repo","old"))   # old layouts last
+for t in ([own] if own else [])+rest: print(t,"own" if t==own else "-",mode(t,g[t]),label(t,g[t]))
+for t in joined:
+    if t not in g: print(t,"-","joined,no-row","in joined.json only")
+PY3
+}
 soul_dir() {  # the oracle's soul repo: config.yaml soul: ({ghq} expanded), else laris-co/<oracle>
   local s=$(sed -n 's/^soul: *"\{0,1\}\([^"#]*\)"\{0,1\}.*/\1/p' $TEAM/oracles/$1/config.yaml 2>/dev/null | head -1 | sed "s#{ghq}#$GHQ#")
   echo ${s:-$GHQ/github.com/laris-co/$1}
@@ -82,7 +119,7 @@ ls)
   git -C $R worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r W; do
     [[ $W = */wt/*-soul ]] || continue; found=1
     o=${${W:t}%-soul}
-    th=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),"-"))' $W/.discord/access.json 2>/dev/null || echo -)
+    heard=$(threads_of $W/.discord $o)
     ready=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print("ready" if d.get("gateway",{}).get("ready") else "not ready")' $W/.discord/status.json 2>/dev/null || echo "no status")
     pane=$(herdr pane list 2>/dev/null | python3 -c 'import json,sys
 w=sys.argv[1]
@@ -90,9 +127,9 @@ try:
   ps=json.load(sys.stdin)["result"]["panes"]
   print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),"-"))
 except Exception: print("-")' $W)
-    lay=$(print -r -- $where_all | awk -v t=$th -v o=$o '$1==t && $3==o{print $2}' | head -1)
-    case $lay in l9) lay="layout 9";; repo) lay="#repo layout";; old) lay="old layout";; esac
-    echo "  $o  thread $th${lay:+ ($lay)}  pane $pane  gateway $ready  ($W)"
+    echo "  $o  pane $pane  gateway $ready  ($W)"
+    print -r -- $heard | while read -r t own md lb; do [[ -n $t ]] && printf "      %-20s %-20s %s\n" $t ${md//-/ } "$lb"; done
+    [[ -n $heard ]] || echo "      no access.json rows: hears nothing"
   done
   python3 - "$LARIS" "$full" <<'PY2'
 import json,sys
@@ -152,7 +189,7 @@ in)
 out)
   o=${ARGS[2]:?oracle}; R=$(repo_path ${ARGS[3]:-}); W=$R/wt/$o-soul
   [[ -d $W ]] || { echo "no soul body at $W"; exit 1; }
-  th=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),""))' $W/.discord/access.json)
+  where_all=$(rows); th=$(threads_of $W/.discord $o | awk '$2=="own"{print $1}')
   pane=$(herdr pane list | python3 -c 'import json,sys;w=sys.argv[1];ps=json.load(sys.stdin)["result"]["panes"];print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),""))' $W)
   dirty=$(git -C $W status --porcelain | wc -l | tr -d ' ')
   ahead=$(git -C $W rev-list --count @{u}..HEAD 2>/dev/null || git -C $W rev-list --count origin/main..HEAD 2>/dev/null || echo "?")
@@ -212,5 +249,24 @@ json.dump(a,open(f,"w"),indent=2)' $LARIS $key $o && echo "  ✓ Laris row updat
   fi
   ;;
 
-*) sed -n '2,9p' $0; exit 2;;
+ears)
+  o=${ARGS[2]:?oracle}; rest=(${ARGS[3,-1]})
+  if [[ -n ${rest[1]:-} && ${rest[1]} != (ls|add|rm) ]]; then R=$(repo_path ${rest[1]}); rest=(${rest[2,-1]}); else R=$(repo_path ""); fi
+  W=$R/wt/$o-soul; sub=${rest[1]:-ls}
+  [[ -d $W/.discord ]] || { echo "✗ no soul body at $W"; echo "  herdr-soul ls $R"; exit 1; }
+  if [[ $sub = ls ]]; then
+    where_all=$(rows); echo "$o hears ($W/.discord/access.json):"
+    threads_of $W/.discord $o | while read -r t own md lb; do printf "  %-20s %-20s %s\n" $t ${md//-/ } "$lb"; done
+    exit 0
+  fi
+  th=${rest[2]:-}
+  [[ $th = <-> ]] || { echo "✗ thread id (digits) required"; echo "  herdr-soul ears $o $R $sub <thread id>${EARS:+ $EARS}"; exit 2; }
+  if (( GO )); then python3 -I $EARS_BIN $sub $th $EARS --body $W
+  else
+    python3 -I $EARS_BIN $sub $th $EARS --body $W --dry
+    echo "(plan only; add --go to write $W/.discord/access.json, backup .bak-<ts>-ears first; only on Nat's go from a terminal)"
+  fi
+  ;;
+
+*) sed -n '2,12p' $0; exit 2;;
 esac

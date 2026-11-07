@@ -1,6 +1,6 @@
 ---
 name: herdr-soul
-description: One skill, five verbs, for putting an oracle's SOUL to work inside ANOTHER repo (layout 9: channel <owner>∕<repo>, one thread per oracle opened by its own bot, body = <repo>/wt/<oracle>-soul). `/herdr-soul list` (who can come in), `ls [repo]` (souls in a repo), `check <oracle> [repo]` (preflight, changes nothing), `in <oracle> [repo]` (bring the soul in), `out <oracle> [repo]` (take it out). Backed by real code: bin/herdr-soul in laris-co/soul-in-repo. Use when Nat says "bring <oracle> in", "soul in repo", "which souls are here", "take neo out of X", "/herdr-soul". The model and every trap are in /soul-in-repo.
+description: One skill, six verbs, for putting an oracle's SOUL to work inside ANOTHER repo (layout 9: channel <owner>∕<repo>, one thread per oracle opened by its own bot, body = <repo>/wt/<oracle>-soul). `/herdr-soul list` (who can come in), `ls [repo]` (souls in a repo), `check <oracle> [repo]` (preflight, changes nothing), `in <oracle> [repo]` (bring the soul in), `out <oracle> [repo]` (take it out), `ears <oracle> [repo] [add|rm <thread>]` (threads the body hears; add or remove one). Backed by real code: bin/herdr-soul in laris-co/soul-in-repo. Use when Nat says "bring <oracle> in", "soul in repo", "which souls are here", "take neo out of X", "/herdr-soul". The model and every trap are in /soul-in-repo.
 ---
 
 # /herdr-soul — bring a soul into a repo, with a script, not just prose
@@ -31,9 +31,10 @@ Post the plan (`check` output + `in --dry` line) in the thread Nat is talking in
 
 | verb | changes | who says go |
 |---|---|---|
-| list, ls, check, in --dry, out | nothing | anyone |
+| list, ls, check, in --dry, out, ears, ears add/rm (no --go) | nothing | anyone |
 | in | Discord channel/thread, worktree, herdr space, **Laris access row** | Nat or catbutter **in the terminal** (access rows never come from a chat ask) |
 | out --go | closes a pane, removes an access row, archives a thread | same, terminal |
+| ears add/rm --go | the soul body's own `.discord/access.json` (backup first; rm keeps the row under "removed") | same, terminal |
 
 `in` and `out --go` touch `access.local.json`; a Discord "go" alone is not enough.
 

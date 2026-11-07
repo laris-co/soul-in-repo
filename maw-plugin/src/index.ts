@@ -8,6 +8,8 @@
 //   maw soul in      <oracle> [repo]       plan; --yes brings the soul in
 //   maw soul out     <oracle> [repo]       plan; --yes takes it out (herdr-soul out --go)
 //   maw soul migrate <oracle> [repo]       plan; --yes moves a LIVE body to #repo (soul-in-repo.sh --migrate)
+//   maw soul ears    <oracle> [repo] [ls]  threads the body hears; add|rm <thread> [--all]: plan, --yes writes
+//                                          (herdr-soul ears --go, which runs bin/soul-ears on the body's own access.json)
 //   --deny-main / --chname=dash on in / migrate: passed to soul-in-repo.sh (layout 9: channel per repo,
 //   thread per oracle)
 //
@@ -28,6 +30,10 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   maw soul in        <oracle> [repo]    plan; add --yes to bring the soul in
   maw soul out       <oracle> [repo]    plan; add --yes to take it out
   maw soul migrate   <oracle> [repo]    plan; add --yes to move a live body to its own thread in <owner>∕<repo>
+  maw soul ears      <oracle> [repo]    threads the body hears: own thread, office (joined), old rows
+  maw soul ears      <oracle> [repo] add|rm <thread> [--all]
+                                        plan; add --yes to write the body's access.json (backup first;
+                                        rm keeps the entry under "removed"). --all = every line, else tag only
 
   [repo]  owner/name, an absolute path, or empty = the git repo of this folder
   --deny-main  with in / migrate: also keep the oracle's main body out of the repo channel
@@ -49,13 +55,16 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const denyMain = args.includes("--deny-main");
   const chname = args.find(a => a.startsWith("--chname="));
   const pin = args.find(a => a.startsWith("--channel="));
+  const all = args.includes("--all");
   if (pin && !/^--channel=\d{15,22}$/.test(pin)) return { error: `${pin}: use --channel=<channel id>` };
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== chname && a !== pin);
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin);
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
   if (unknown) return { error: `unknown flag ${unknown}\n  maw soul help` };
+  if (all && verb !== "ears") return { error: "--all goes with ears add, not " + verb };
+  if (verb === "ears") return earsPlan(pos, yes && !dryAsked, all, !!(denyMain || chname || pin));
   if (READS.has(verb)) {
     if (verb === "check" && !pos[0]) return { error: "which oracle?\n  maw soul check <oracle> [repo]" };
     if (verb === "check") return { argv: ["check", oracleName(pos[0]!), ...pos.slice(1)], dry: false };
@@ -70,6 +79,26 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   if (verb === "out") return { argv: ["out", oracle, ...repo, ...(dry ? [] : ["--go"])], dry };
   const pass = [...(verb === "migrate" ? ["--migrate"] : []), ...(denyMain ? ["--deny-main"] : []), ...(chname ? [chname] : []), ...(pin ? [pin] : [])];
   return { argv: ["in", oracle, ...repo, ...pass, ...(dry ? ["--dry"] : [])], dry };
+}
+
+// ears <oracle> [repo] [ls | add <thread> | rm <thread>]
+function earsPlan(pos: string[], yes: boolean, all: boolean, otherFlag: boolean): { argv: string[]; dry: boolean } | { error: string } {
+  if (otherFlag) return { error: "--deny-main, --chname and --channel go with in or migrate, not ears" };
+  if (!pos[0]) return { error: "which oracle?\n  maw soul ears <oracle> [repo] [add|rm <thread>]" };
+  const oracle = oracleName(pos[0]);
+  const subAt = pos.findIndex((a, i) => i > 0 && ["ls", "add", "rm"].includes(a));
+  const repo = pos.slice(1, subAt < 0 ? undefined : subAt);
+  if (repo.length > 1) return { error: `too many words: ${repo.join(" ")}\n  maw soul ears ${pos[0]} [repo] [add|rm <thread>]` };
+  const sub = subAt < 0 ? "ls" : pos[subAt]!;
+  if (sub === "ls") {
+    if (all || yes) return { error: "--all and --yes go with ears add|rm" };
+    return { argv: ["ears", oracle, ...repo], dry: false };
+  }
+  const thread = pos[subAt + 1];
+  if (!thread || !/^\d{15,22}$/.test(thread)) return { error: `which thread?\n  maw soul ears ${pos[0]} ${[...repo, sub].join(" ")} <thread id>` };
+  if (pos.length > subAt + 2) return { error: `too many words after ${thread}` };
+  if (all && sub === "rm") return { error: "--all goes with ears add, not rm" };
+  return { argv: ["ears", oracle, ...repo, sub, thread, ...(all ? ["--all"] : []), ...(yes ? ["--go"] : [])], dry: !yes };
 }
 
 export function herdrSoul(): string {
@@ -89,7 +118,7 @@ export async function handler(ctx: InvokeContext): Promise<PluginResult> {
   const r = spawnSync("zsh", [bin, ...p.argv], { stdio: "inherit" });
   if (r.error) return { ok: false, error: `cannot run zsh: ${r.error.message}` };
   const verb = p.argv[0];
-  const tail = p.dry && WRITES.has(args.find(a => !a.startsWith("--")) ?? "")
+  const tail = p.dry && (WRITES.has(args.find(a => !a.startsWith("--")) ?? "") || p.argv[0] === "ears")
     ? `\nplan only. To run it (Nat's go, from a terminal):\n  maw soul ${args.filter(a => a !== "--dry").join(" ")} --yes`
     : "";
   return r.status === 0 ? { ok: true, output: tail.trim() || undefined } : { ok: false, error: `herdr-soul ${verb} exited ${r.status}` };
