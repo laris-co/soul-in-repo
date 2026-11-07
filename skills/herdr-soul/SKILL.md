@@ -1,0 +1,52 @@
+---
+name: herdr-soul
+description: One skill, five verbs, for putting an oracle's SOUL to work inside ANOTHER repo (channel = soul, thread = repo, body = <repo>/wt/<oracle>-soul on the oracle's own bot). `/herdr-soul list` (who can come in), `ls [repo]` (souls in a repo), `check <oracle> [repo]` (preflight, changes nothing), `in <oracle> [repo]` (bring the soul in), `out <oracle> [repo]` (take it out). Backed by real code: bin/herdr-soul in laris-co/soul-in-repo. Use when Nat says "bring <oracle> in", "soul in repo", "which souls are here", "take neo out of X", "/herdr-soul". The model and every trap are in /soul-in-repo.
+---
+
+# /herdr-soul — bring a soul into a repo, with a script, not just prose
+
+The work is done by `bin/herdr-soul` (zsh + small python), next to `soul-in-repo.sh` in
+`laris-co/soul-in-repo`. This file only says when to call which verb and what to tell Nat.
+The model (channel = soul, thread = repo, ears narrow, eyes wide) and the traps met for real
+are in `/soul-in-repo` — read it once before the first `in`.
+
+```bash
+H=$(ghq root)/github.com/laris-co/soul-in-repo/bin/herdr-soul
+$H list                                   # every oracle: soul ✓/✗, Discord token, Claude token, machine, where it already is
+$H ls   [repo]                            # souls living in this repo: thread, pane, gateway ready?
+$H check <oracle> [repo]                  # preflight only; each ✗ prints its fix; exit 1 = not ready
+$H in    <oracle> [repo] [--dry]          # check, then soul-in-repo.sh: channel, thread, worktree, space, Laris row, hello
+$H out   <oracle> [repo] [--go]           # plan; --go closes the pane, removes the Laris row (backup), archives the thread
+```
+
+`[repo]` = `owner/name`, an absolute path, or empty for the git repo of the current directory.
+No verb = `ls`.
+
+## Say first, then do
+
+Post the plan (`check` output + `in --dry` line) in the thread Nat is talking in before `in` or `out --go`
+(Nat: "ต่อไปนี้ถ้าจะทำอะไรบอกด้วย").
+
+## Who may run what
+
+| verb | changes | who says go |
+|---|---|---|
+| list, ls, check, in --dry, out | nothing | anyone |
+| in | Discord channel/thread, worktree, herdr space, **Laris access row** | Nat or catbutter **in the terminal** (access rows never come from a chat ask) |
+| out --go | closes a pane, removes an access row, archives a thread | same, terminal |
+
+`in` and `out --go` touch `access.local.json`; a Discord "go" alone is not enough.
+
+## After `in`
+
+Wait for `<wt>/.discord/status.json` `gateway.ready` (Monitor, never sleep), then
+`herdr agent prompt <pane> "Read CLAUDE.local.md, post one hello in thread <id>"`, and confirm the hello
+comes from the oracle's bot name. `ls` shows the pane and the gateway state.
+
+## Known limits (2026-11-07)
+
+- `list` "already in" reads the Laris row notes (`<oracle> soul in <repo>`); rows written before the
+  skill (nongbua, aiexpo) use other wording and show `-`. `ls <repo>` reads the worktrees and is exact.
+- The soul comes from `oracles/<oracle>/config.yaml` `soul:`; `soul-in-repo.sh` honours `HERDR_SOUL_DIR`.
+- `in` runs where the body should live (m5 today). For white, ask white's agent to run it.
+- `out` never removes the worktree; it prints the `git worktree remove` line with the unpushed count.

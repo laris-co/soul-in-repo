@@ -1,0 +1,136 @@
+#!/usr/bin/env zsh
+# herdr-soul — one tool, five verbs: put an oracle's soul to work inside another repo.
+#   herdr-soul list                      oracles that can come in (soul, Discord token, Claude token, machine, where they already are)
+#   herdr-soul ls    [repo]              souls living in a repo: worktree, thread, pane, gateway ready?
+#   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
+#   herdr-soul in    <oracle> [repo]     check, then soul-in-repo.sh (channel, thread, worktree, space, Laris row, hello)
+#   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes the pane, removes the Laris row, archives the thread
+# [repo] = owner/name, an absolute path, or empty = the git repo of the current directory.
+# Every verb accepts --dry. Tokens come from pass and are never printed.
+set -euo pipefail
+HERE=${0:A:h}
+TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
+LARIS=$HOME/.claude/channels/laris-labs-oracle/access.local.json
+GHQ=$(ghq root)
+SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
+DRY=0; GO=0; ARGS=()
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; *) ARGS+=$a;; esac; done
+VERB=${ARGS[1]:-ls}
+
+repo_path() {  # $1 = owner/name | abs path | empty
+  local r=${1:-}
+  if [[ -z $r ]]; then git rev-parse --path-format=absolute --git-common-dir 2>/dev/null | xargs dirname 2>/dev/null || { echo "not in a git repo; pass a repo" >&2; exit 2; }
+  elif [[ $r = /* ]]; then echo $r
+  else echo $GHQ/github.com/$r; fi
+}
+cfg() { sed -n "s/^$2: *\\([^ #]*\\).*/\\1/p" $TEAM/oracles/$1/config.yaml 2>/dev/null | head -1; }
+has_pass() { pass show "$1" >/dev/null 2>&1; }
+soul_dir() {  # the oracle's soul repo: config.yaml soul: ({ghq} expanded), else laris-co/<oracle>
+  local s=$(sed -n 's/^soul: *"\{0,1\}\([^"#]*\)"\{0,1\}.*/\1/p' $TEAM/oracles/$1/config.yaml 2>/dev/null | head -1 | sed "s#{ghq}#$GHQ#")
+  echo ${s:-$GHQ/github.com/laris-co/$1}
+}
+
+case $VERB in
+list)
+  printf "%-32s %-5s %-6s %-7s %-8s %s\n" ORACLE SOUL TOKEN CLAUDE MACHINE "ALREADY IN (Laris rows)"
+  python3 - "$LARIS" > /tmp/herdr-soul-where.$$ <<'PY'
+import json,re,sys
+try: g=json.load(open(sys.argv[1])).get("groups",{})
+except Exception: g={}
+w={}
+for th,v in g.items():
+    m=re.match(r"(\S+?)(?:-oracle)? soul in (\S+)",v.get("note",""))
+    if m: w.setdefault(m.group(1).lower(),[]).append(m.group(2))
+for k,v in w.items(): print(k, ",".join(v))
+PY
+  for d in $TEAM/oracles/*-oracle(/); do
+    o=${d:t}; short=${o%-oracle}
+    [[ $(cfg $o retired) = true ]] && continue
+    soul=$([[ -f $(soul_dir $o)/CLAUDE.md ]] && echo ✓ || echo ✗)
+    tok=$(has_pass discord/$o-token && echo ✓ || echo ✗)
+    ct=$(cfg $o claude_token); ct=${ct:-t3}
+    m=$(cfg $o machine); m=${m:--}
+    where=$(awk -v k=$short '$1==k{print $2}' /tmp/herdr-soul-where.$$)
+    printf "%-32s %-5s %-6s %-7s %-8s %s\n" $o $soul $tok $ct $m "${where:--}"
+  done
+  rm -f /tmp/herdr-soul-where.$$
+  ;;
+
+ls)
+  R=$(repo_path ${ARGS[2]:-}); echo "repo: $R"
+  found=0
+  git -C $R worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r W; do
+    [[ $W = */wt/*-soul ]] || continue; found=1
+    o=${${W:t}%-soul}
+    th=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),"-"))' $W/.discord/access.json 2>/dev/null || echo -)
+    ready=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print("ready" if d.get("gateway",{}).get("ready") else "not ready")' $W/.discord/status.json 2>/dev/null || echo "no status")
+    pane=$(herdr pane list 2>/dev/null | python3 -c 'import json,sys
+w=sys.argv[1]
+try:
+  ps=json.load(sys.stdin)["result"]["panes"]
+  print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),"-"))
+except Exception: print("-")' $W)
+    echo "  $o  thread $th  pane $pane  gateway $ready  ($W)"
+  done
+  ;;
+
+check)
+  o=${ARGS[2]:?oracle}; R=$(repo_path ${ARGS[3]:-}); fail=0
+  ok()  { echo "  ✓ $1"; }
+  bad() { echo "  ✗ $1"; echo "      fix: $2"; fail=1; }
+  echo "check $o -> $R"
+  sd=$(soul_dir $o); [[ -f $sd/CLAUDE.md ]] && ok "soul ${sd#$GHQ/github.com/}/CLAUDE.md" || bad "no soul at $sd" "ghq get the soul repo named in oracles/$o/config.yaml soul:"
+  has_pass discord/$o-token && ok "Discord token in pass" || bad "no pass discord/$o-token" "create the bot, then pass insert discord/$o-token (terminal)"
+  ct=$(cfg $o claude_token); ct=${ct:-t3}
+  has_pass claude/token-$ct && ok "Claude token $ct" || bad "no pass claude/token-$ct" "set claude_token: in oracles/$o/config.yaml or add the pass entry"
+  [[ -d $R/.git || -f $R/.git ]] && ok "repo exists" || bad "not a repo: $R" "ghq get <owner>/<name>"
+  if [[ -d $R ]]; then
+    git -C $R check-ignore -q wt/ && ok "wt/ is ignored" || bad "wt/ is not ignored" "echo wt/ >> $R/.gitignore && git -C $R commit -m 'ignore wt/' .gitignore"
+    W=$R/wt/$o-soul
+    [[ -d $W ]] && echo "  • worktree already there: $W (in will reuse it)" || ok "no worktree yet"
+  fi
+  name=${R:t}
+  if python3 -c 'import json,re,sys
+g=json.load(open(sys.argv[1])).get("groups",{})
+o=sys.argv[2].replace("-oracle",""); n=sys.argv[3]
+sys.exit(0 if any(re.match(rf"{re.escape(o)}(-oracle)? soul in {re.escape(n)}\b", v.get("note","")) for v in g.values()) else 1)' $LARIS $o $name 2>/dev/null; then
+    echo "  • Laris already has a row for $o in $name: the thread exists (in would make a second one)"; fail=1
+  else ok "no thread yet for $o in $name"; fi
+  m=$(cfg $o machine)
+  [[ -n $m ]] && echo "  • main body lives on $m: a new thread is in no other access file, so no double answers"
+  (( fail )) && { echo "result: NOT ready"; exit 1; } || echo "result: ready"
+  ;;
+
+in)
+  o=${ARGS[2]:?oracle}; R=$(repo_path ${ARGS[3]:-})
+  $0 check $o $R || { echo "stop: fix the items above first"; exit 1; }
+  export HERDR_SOUL_DIR=$(soul_dir $o)
+  if (( DRY )); then zsh $SCRIPT $o $R --dry; else zsh $SCRIPT $o $R; fi
+  ;;
+
+out)
+  o=${ARGS[2]:?oracle}; R=$(repo_path ${ARGS[3]:-}); W=$R/wt/$o-soul
+  [[ -d $W ]] || { echo "no soul body at $W"; exit 1; }
+  th=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),""))' $W/.discord/access.json)
+  pane=$(herdr pane list | python3 -c 'import json,sys;w=sys.argv[1];ps=json.load(sys.stdin)["result"]["panes"];print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),""))' $W)
+  dirty=$(git -C $W status --porcelain | wc -l | tr -d ' ')
+  ahead=$(git -C $W rev-list --count @{u}..HEAD 2>/dev/null || git -C $W rev-list --count origin/main..HEAD 2>/dev/null || echo "?")
+  echo "plan: take $o out of ${R:t}"
+  echo "  1. close pane ${pane:-none}"
+  echo "  2. remove Laris row for thread ${th:-?} (backup first)"
+  echo "  3. archive thread ${th:-?} (Nothing is Deleted: it stays readable)"
+  echo "  4. worktree stays: $dirty uncommitted, $ahead unpushed — remove later with: git -C $R worktree remove $W"
+  (( GO )) || { echo "(plan only; add --go to do 1-3)"; exit 0; }
+  [[ -n $pane ]] && herdr pane close $pane >/dev/null && echo "  ✓ pane closed"
+  if [[ -n $th ]]; then
+    cp $LARIS $LARIS.bak-$(date +%Y%m%d-%H%M%S)-soul-out
+    python3 -c 'import json,sys;f,t=sys.argv[1:];a=json.load(open(f));a.get("groups",{}).pop(t,None);json.dump(a,open(f,"w"),indent=2)' $LARIS $th && echo "  ✓ Laris row removed"
+    T=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
+    code=$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH -H "Authorization: Bot $T" -H 'Content-Type: application/json' \
+      -d '{"archived":true}' https://discord.com/api/v10/channels/$th)
+    echo "  ✓ thread archive: HTTP $code"
+  fi
+  ;;
+
+*) sed -n '2,9p' $0; exit 2;;
+esac

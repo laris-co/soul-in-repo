@@ -16,7 +16,7 @@ NAT=691531480689541170; CB=917019242094817301
 TEAM=/opt/Code/github.com/laris-co/laris-team
 SAY=$TEAM/tools/discord-say.sh
 ghq=$(ghq root)
-soul=$ghq/github.com/laris-co/$oracle
+soul=${HERDR_SOUL_DIR:-$ghq/github.com/laris-co/$oracle}
 [[ -f $soul/CLAUDE.md ]] || { echo "no soul: $soul/CLAUDE.md"; exit 1; }
 [[ $repo = /* ]] && R=$repo || R=$ghq/github.com/$repo
 [[ -d $R/.git || -f $R/.git ]] || { echo "not a repo: $R"; exit 1; }

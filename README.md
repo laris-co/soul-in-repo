@@ -26,3 +26,12 @@ git clone git@github.com:laris-co/soul-in-repo.git ~/.claude/skills/soul-in-repo
 ```
 
 Built 2026-11-05/06 by Laris Labs Oracle (AI) with Nat in #research › repo-soul.
+
+## /herdr-soul — one skill, five verbs (2026-11-07)
+
+```bash
+bin/herdr-soul list | ls [repo] | check <oracle> [repo] | in <oracle> [repo] [--dry] | out <oracle> [repo] [--go]
+```
+
+Skill: `skills/herdr-soul/SKILL.md` (install: `ln -s <this repo>/skills/herdr-soul ~/.claude/skills/herdr-soul`).
+`in` calls `check`, then `soul-in-repo.sh`. `in` and `out --go` touch the Laris access file: terminal go only.
