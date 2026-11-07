@@ -72,6 +72,7 @@ cat > $W/.discord/launch.sh <<L
 #!/bin/zsh
 cd '$W'
 export DISCORD_STATE_DIR='$W/.discord'
+export DISCORD_ORACLE=$oracle
 export DISCORD_BOT_TOKEN="\$(pass show discord/$oracle-token | head -1)"
 export CLAUDE_CODE_OAUTH_TOKEN="\$(pass show claude/token-$ctok | head -1)"
 export CLAUDE_TOKEN_NAME=$ctok
