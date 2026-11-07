@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# herdr-soul — one tool, nine verbs: put an oracle's soul to work inside another repo.
+# herdr-soul — one tool, eleven verbs: put an oracle's soul to work inside another repo.
 #   herdr-soul list                      oracles that can come in (soul, Discord token, Claude token, machine, where they already are)
 #   herdr-soul ls    [repo]              souls living in a repo: worktree, thread, pane, gateway ready?
 #   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
@@ -21,6 +21,10 @@
 #   herdr-soul ears  <oracle> [repo] [ls]                   threads the soul's body hears (access.json + joined.json)
 #   herdr-soul ears  <oracle> [repo] add|rm <thread> [--all] plan; --go (or --yes) writes the body's own access.json via bin/soul-ears
 #                                        (backup .bak-<ts>-ears first; rm keeps the entry under "removed")
+#   herdr-soul threads [repo]            every thread the repo's soul bodies hear: Discord name, archived?, which souls
+#                                        hear it and how (Discord GETs with each soul's own token; changes nothing)
+#   herdr-soul icon  <oracle> [repo] [--off]  plan to rename the soul's own thread to '<icon>・<oracle>' (icon: from
+#                                        oracles/<o>/config.yaml); --go (or --yes) renames it with the soul's own bot
 # Laris rows, newest first. layout 9 (2026-11-07 06:34Z): one row per repo CHANNEL (<owner>∕<repo>), "layout": 9,
 # souls[] + threads{oracle: thread}. #repo layout (morning of 2026-11-07): one row per #repo thread, souls[]. Old rows
 # ('<oracle> soul in <repo>') still count until the body is migrated. Notes starting 'moved to' are history, never live.
@@ -33,8 +37,8 @@ LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 EARS_BIN=${HERDR_SOUL_EARS:-$HERE/soul-ears}
-DRY=0; GO=0; YES=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; NAME=""; BPANE=""; WHOLE=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+DRY=0; GO=0; YES=0; OFF=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; NAME=""; BPANE=""; WHOLE=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --all) EARS+=$a;; --off) OFF=1;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -486,5 +490,67 @@ ears)
   fi
   ;;
 
-*) sed -n '2,23p' $0; exit 2;;
+threads)
+  # which soul hears which thread. Bodies = <repo>/wt/*-soul; names come from Discord (GET) with that soul's token.
+  R=$(repo_path ${ARGS[2]:-}); echo "repo: $R ($(repo_full $R))"; where_all=$(rows)
+  rowsall=""
+  for W in $R/wt/*-soul(/N); do
+    o=${${W:t}%-soul}
+    rowsall+=$(threads_of $W/.discord $o | awk -v o=$o '{print $1, o, $2, $3, $4}')$'\n'
+  done
+  [[ -n ${rowsall//[[:space:]]/} ]] || { echo "  no soul bodies under $R/wt/*-soul"; exit 0; }
+  print -r -- $rowsall | SOULTOKENS="$(for W in $R/wt/*-soul(/N); do o=${${W:t}%-soul}; t=$(pass show discord/$o-token 2>/dev/null | head -1 | tr -d '[:space:]'); [[ -n $t ]] && print -r -- "$o $t"; done)" python3 -c '
+import json,os,sys,urllib.request
+tok=dict(l.split(" ",1) for l in os.environ.get("SOULTOKENS","").splitlines() if " " in l)
+by={}
+for ln in sys.stdin:
+    p=ln.split()
+    if len(p)>=4: by.setdefault(p[0],[]).append((p[1],p[2],p[3].replace("-"," ")))
+def get(t,o):
+    k=tok.get(o)
+    if not k: return None
+    r=urllib.request.Request(f"https://discord.com/api/v10/channels/{t}",headers={"Authorization":"Bot "+k,"User-Agent":"herdr-soul (soul-in-repo, 1)"})
+    try: return json.load(urllib.request.urlopen(r,timeout=10))
+    except Exception as e: return {"_err":str(getattr(e,"code",e))}
+for t,souls in by.items():
+    info=None
+    for o,_,_ in souls:
+        info=get(t,o)
+        if info and "_err" not in info: break
+    if not info: name="?"; meta="no token to look"
+    elif "_err" in info: name="?"; meta="GET "+info["_err"]
+    else:
+        name=info.get("name","?"); md=info.get("thread_metadata") or {}
+        meta=("archived" if md.get("archived") else "open")+(" · parent "+info["parent_id"] if info.get("parent_id") else "")
+    print(f"  {t}  {name}  ({meta})")
+    for o,own,mode in souls: print(f"      {o:16} {mode:20} {"own thread" if own=="own" else ""}")
+'
+  ;;
+
+icon)
+  o=${ARGS[2]:?oracle}; R=$(repo_path ${ARGS[3]:-}); W=$R/wt/$o-soul
+  [[ -d $W/.discord ]] || { echo "✗ no soul body at $W"; echo "  herdr-soul ls $R"; exit 1; }
+  where_all=$(rows); th=$(threads_of $W/.discord $o | awk '$2=="own"{print $1}')
+  [[ -n $th ]] || { echo "✗ $o has no own thread in $W/.discord/access.json"; echo "  herdr-soul ears $o $R"; exit 1; }
+  ic=$(sed -n 's/^icon: *"\{0,1\}\([^" #]*\)"\{0,1\}.*/\1/p' $TEAM/oracles/$o/config.yaml 2>/dev/null | head -1)
+  (( OFF )) || [[ -n $ic ]] || { echo "✗ no icon: in $TEAM/oracles/$o/config.yaml"; echo "  add a line like: icon: \"🧭\""; exit 1; }
+  T=$(pass show discord/$o-token 2>/dev/null | head -1 | tr -d '[:space:]')
+  [[ -n $T ]] || { echo "✗ no pass discord/$o-token"; echo "  pass insert discord/$o-token"; exit 1; }
+  cur=$(T=$T python3 -c 'import json,os,sys,urllib.request
+r=urllib.request.Request("https://discord.com/api/v10/channels/"+sys.argv[1],headers={"Authorization":"Bot "+os.environ["T"],"User-Agent":"herdr-soul (soul-in-repo, 1)"})
+print(json.load(urllib.request.urlopen(r,timeout=10)).get("name",""))' $th)
+  base=$(python3 -c 'import re,sys;print(re.sub(r"^[^\w#]+","",sys.argv[1]).strip())' "$cur")   # name without a leading icon
+  if (( OFF )); then new=$base; else new="$ic・$base"; fi   # same '<icon>・<name>' style as the 📦・ channel
+  if [[ $cur == $new ]]; then echo "= thread $th already named '$cur'"; exit 0; fi
+  echo "plan: rename thread $th '$cur' -> '$new' (with $o's own bot; it opened the thread)"
+  (( GO || YES )) || { echo "(plan only; add --go to rename)"; exit 0; }
+  code=$(T=$T python3 -c 'import json,os,sys,urllib.request
+r=urllib.request.Request("https://discord.com/api/v10/channels/"+sys.argv[1],data=json.dumps({"name":sys.argv[2]}).encode(),method="PATCH",
+  headers={"Authorization":"Bot "+os.environ["T"],"Content-Type":"application/json","User-Agent":"herdr-soul (soul-in-repo, 1)"})
+try: print(urllib.request.urlopen(r,timeout=10).status)
+except Exception as e: print(getattr(e,"code",e))' $th "$new")
+  [[ $code = 200 ]] && echo "  ✓ renamed: '$new'" || { echo "  ✗ rename HTTP $code"; echo "  herdr-soul icon $o $R --dry"; exit 1; }
+  ;;
+
+*) sed -n '2,27p' $0; exit 2;;
 esac

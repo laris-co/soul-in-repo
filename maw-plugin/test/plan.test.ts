@@ -96,3 +96,16 @@ test("link --whole-channel: channel id only, not with --channel; unlink takes it
   expect("error" in plan(["link", w, "--whole-channel=abc"])).toBe(true);
   expect("error" in plan(["link", w, "--whole-channel=1568518331600867338", "--channel=1568518331600867338"])).toBe(true);
 });
+
+test("threads reads; icon is a plan unless --yes", () => {
+  expect(plan(["threads"])).toEqual({ argv: ["threads"], dry: false });
+  expect(plan(["threads", "laris-co/soul-in-repo"])).toEqual({ argv: ["threads", "laris-co/soul-in-repo"], dry: false });
+  expect(plan(["icon", "neo"])).toEqual({ argv: ["icon", "neo-oracle"], dry: true });
+  expect(plan(["icon", "neo", "laris-co/x", "--yes"])).toEqual({ argv: ["icon", "neo-oracle", "laris-co/x", "--go"], dry: false });
+  expect(plan(["icon", "pulse", "--off", "--yes"])).toEqual({ argv: ["icon", "pulse-oracle", "--off", "--go"], dry: false });
+  expect(plan(["icon", "neo", "--yes", "--dry"])).toEqual({ argv: ["icon", "neo-oracle"], dry: true });
+  const err = (a: string[]) => (plan(a) as { error: string }).error;
+  expect(err(["icon"])).toContain("maw soul icon <oracle>");
+  expect(err(["icon", "neo", "--all"])).toContain("icon takes only");
+  expect(err(["ls", "--off"])).toContain("--off goes with icon");
+});
