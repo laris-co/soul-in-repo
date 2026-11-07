@@ -45,8 +45,9 @@ comes from the oracle's bot name. `ls` shows the pane and the gateway state.
 
 ## Known limits (2026-11-07)
 
-- `list` "already in" reads the Laris row notes (`<oracle> soul in <repo>`); rows written before the
-  skill (nongbua, aiexpo) use other wording and show `-`. `ls <repo>` reads the worktrees and is exact.
+- `list` "already in" reads the Laris row notes (`<oracle> soul in <repo>`). The two older rows (nongbua,
+  aiexpo) were rewritten to that wording on 2026-11-07; a row written by hand in another wording shows `-`.
+  `ls <repo>` reads the worktrees and is always exact.
 - The soul comes from `oracles/<oracle>/config.yaml` `soul:`; `soul-in-repo.sh` honours `HERDR_SOUL_DIR`.
 - `in` runs where the body should live (m5 today). For white, ask white's agent to run it.
 - `out` never removes the worktree; it prints the `git worktree remove` line with the unpushed count.
