@@ -65,7 +65,34 @@ test("ears: errors name the fix", () => {
   expect(err(["ears", "neo", "add", "abc"])).toContain("<thread id>");
   expect(err(["ears", "neo", "rm", "1568526565242044558", "--all"])).toContain("--all goes with ears add");
   expect(err(["ears", "neo", "--all"])).toContain("--all and --yes go with ears add|rm");
-  expect(err(["ears", "neo", "--deny-main"])).toContain("not ears");
+  expect(err(["ears", "neo", "--deny-main"])).toContain("do not go with ears");
+  expect(err(["ears", "neo", "--bot=x"])).toContain("do not go with ears");
   expect(err(["in", "neo", "--all"])).toContain("--all goes with ears add");
   expect(err(["ears", "neo", "a/b", "c/d"])).toContain("too many words");
+});
+
+test("room: many souls, plan unless --yes, channel pin passes through", () => {
+  expect(plan(["room", "laris-co/nongbua-oracle", "neo", "digger-oracle"])).toEqual({ argv: ["room", "laris-co/nongbua-oracle", "neo-oracle", "digger-oracle", "--dry"], dry: true });
+  expect(plan(["room", "laris-co/x", "neo", "--channel=1567747387102072912", "--yes"])).toEqual({ argv: ["room", "laris-co/x", "neo-oracle", "--channel=1567747387102072912", "--yes"], dry: false });
+  expect(plan(["room", "laris-co/x", "neo", "--yes", "--dry"])).toEqual({ argv: ["room", "laris-co/x", "neo-oracle", "--dry"], dry: true });
+  expect("error" in plan(["room", "laris-co/x"])).toBe(true);
+  expect("error" in plan(["room", "laris-co/x", "neo", "--chname=dash"])).toBe(true);
+});
+
+test("link / unlink: plan unless --yes, link options pass through", () => {
+  const w = "/Users/x/.herdr/worktrees/soul-in-repo/worktree-green-forest-241b";
+  expect(plan(["link", w])).toEqual({ argv: ["link", w, "--dry"], dry: true });
+  expect(plan(["link", w, "--bot=somsri-oracle", "--name=green", "--channel=1568518331600867338", "--yes"])).toEqual({ argv: ["link", w, "--bot=somsri-oracle", "--name=green", "--channel=1568518331600867338", "--yes"], dry: false });
+  expect(plan(["unlink", w, "--yes"])).toEqual({ argv: ["unlink", w, "--yes"], dry: false });
+  expect("error" in plan(["link"])).toBe(true);
+  expect("error" in plan(["unlink", w, "--name=x"])).toBe(true);
+  expect("error" in plan(["in", "neo", "--bot=x"])).toBe(true);
+});
+
+test("link --whole-channel: channel id only, not with --channel; unlink takes it too", () => {
+  const w = "/opt/Code/github.com/laris-co/x";
+  expect(plan(["link", w, "--whole-channel=1568518331600867338"])).toEqual({ argv: ["link", w, "--whole-channel=1568518331600867338", "--dry"], dry: true });
+  expect(plan(["unlink", w, "--whole-channel=1568518331600867338", "--yes"])).toEqual({ argv: ["unlink", w, "--whole-channel=1568518331600867338", "--yes"], dry: false });
+  expect("error" in plan(["link", w, "--whole-channel=abc"])).toBe(true);
+  expect("error" in plan(["link", w, "--whole-channel=1568518331600867338", "--channel=1568518331600867338"])).toBe(true);
 });

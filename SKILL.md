@@ -23,7 +23,7 @@ Diagram: `laris-labs-oracle/ψ/lab/2026-11-05_one-bot-many-repos/D1-soul-repo-mo
   `- pulse-oracle    (thread opened by the Pulse bot)
         repo channels hold ONLY soul threads. Somsri (soul center, home laris-co/somsri-oracle, room #somsri) is not
         a soul here: she reads with eyes and answers only when tagged (her own access file, not this script)
-        Laris Labs Oracle: one row on the CHANNEL, requireMention true -> hears tags only, never types
+        Laris Labs Oracle: one row on the CHANNEL, requireMention false (same as the souls, Nat 2026-11-07) -> hears every line, answers only when tagged
         Laris row: {"layout": 9, "channel", "repo", "souls": [...], "threads": {oracle: thread}}
 body: <repo>/wt/<oracle>-soul  branch soul/<oracle>
       soul  = <oracle>/CLAUDE.md, appended at start (--append-system-prompt)
