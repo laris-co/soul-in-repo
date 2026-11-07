@@ -37,3 +37,21 @@ bin/herdr-soul list | ls [repo] | check <oracle> [repo] | in <oracle> [repo] [--
 
 Skill: `skills/herdr-soul/SKILL.md` (install: `ln -s <this repo>/skills/herdr-soul ~/.claude/skills/herdr-soul`).
 `in` calls `check`, then `soul-in-repo.sh`. `in` and `out --go` touch the Laris access file: terminal go only.
+`in` also passes `--migrate` and `--deny-main` through to `soul-in-repo.sh` (with `--migrate` it skips `check`, since the body is already in).
+
+## maw soul — the same verbs from any folder (2026-11-07)
+
+```bash
+maw soul list | ls [repo] | check <oracle> [repo]
+maw soul in <oracle> [repo] [--deny-main] [--yes]
+maw soul migrate <oracle> [repo] [--deny-main] [--yes]
+maw soul out <oracle> [repo] [--yes]
+```
+
+A thin maw plugin in `maw-plugin/`: every verb runs `bin/herdr-soul`, nothing is copied. The herdr plugin `laris.soul`
+(`plugin/`) calls the same script, so all three fronts stay the same.
+
+- `in`, `migrate` and `out` print the plan (`--dry`) unless `--yes` is given. They write access rows, so `--yes` is for
+  Nat's go from a terminal only. The plan ends with the exact `--yes` line to run.
+- `neo` means `neo-oracle`.
+- Install: `ln -s <this repo>/maw-plugin ~/.maw/plugins/soul` (then `maw soul help`). Tests: `cd maw-plugin && bun test`.

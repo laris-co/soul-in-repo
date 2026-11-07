@@ -1,0 +1,2 @@
+{ "name": "maw-soul", "version": "0.1.0", "private": true, "type": "module", "license": "MIT",
+  "scripts": { "test": "bun test", "soul": "bun src/index.ts" } }
