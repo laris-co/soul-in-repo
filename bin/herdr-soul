@@ -16,6 +16,10 @@
 #                                        without a row gets {deny: true, linkedBy: <wt>} (they would fall back to the channel)
 #   herdr-soul unlink <wt-path> [--bot=<oracle>] [--whole-channel=<id>]   archive that thread (whole channel: none) and drop
 #                                        the forward row + the deny rows link wrote (backup). Plan; --yes runs.
+#   herdr-soul idea  <idea> <oracle>... [--channel=<id>] [--dir=<base>] [--yes]   IDEA MODE: channel 💡・<idea>, a thread
+#                                        per soul (its own bot), body = scratch dir (<soul>/ψ/lab/<idea>). Plan; --yes runs.
+#   herdr-soul convert <idea> --repo=<owner/repo> [--public] [--yes]   idea -> repo: create/get the repo, rename the
+#                                        channel 📦・<owner>∕<repo>, rebuild each soul in <repo>/wt on the SAME thread.
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
 #   herdr-soul ears  <oracle> [repo] [ls]                   threads the soul's body hears (access.json + joined.json)
@@ -34,7 +38,7 @@ GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 EARS_BIN=${HERDR_SOUL_EARS:-$HERE/soul-ears}
 DRY=0; GO=0; YES=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; NAME=""; BPANE=""; WHOLE=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --dir=*|--repo=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -181,7 +185,7 @@ def repo_of(v):
 out=[]
 for k,v in g.items():
     if repo_of(v)!=r or v.get("note","").startswith("moved to"): continue
-    if v.get("layout")==9: out.append(f"  Laris: channel {v.get('channel','?')} ({k}, layout 9) souls: "+", ".join(f"{o} › {v.get('threads',{}).get(o,'-')}" for o in v.get("souls",[])))
+    if v.get("layout")==9: out.append(f"  Laris: channel {v.get('channel','?')} ({k}, layout 9, mode {v.get('mode','repo')}) souls: "+", ".join(f"{o} › {v.get('threads',{}).get(o,'-')}" for o in v.get("souls",[])))
     elif "souls" in v: out.append(f"  Laris: #repo › {r} ({k}) souls: "+", ".join(v["souls"]))
 print("\n".join(out) or f"  Laris: no row for {r} yet")
 PY2
@@ -250,6 +254,12 @@ room)
   echo "  • old rooms: archive the leftover #repo / per-oracle threads once the souls hear their new threads"
   (( run )) || echo "plan only. To run (Nat's go, from a terminal): herdr-soul room $full ${ARGS[3,-1]}${pin:+ $pin} --yes"
   (( ${#failed} == 0 ))
+  ;;
+
+idea|convert)
+  # Nat 2026-11-07 22:03 "yes go!" (via Laris): idea mode before a repo exists, then convert. Logic in soul-idea.sh.
+  (( YES && !DRY )) && y=(--yes) || y=()
+  exec zsh $HERE/../soul-idea.sh $VERB ${ARGS[2,-1]} $PASS $y
   ;;
 
 link|unlink)
