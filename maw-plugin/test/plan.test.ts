@@ -63,3 +63,11 @@ test("link / unlink: plan unless --yes, link options pass through", () => {
   expect("error" in plan(["unlink", w, "--name=x"])).toBe(true);
   expect("error" in plan(["in", "neo", "--bot=x"])).toBe(true);
 });
+
+test("link --whole-channel: channel id only, not with --channel; unlink takes it too", () => {
+  const w = "/opt/Code/github.com/laris-co/x";
+  expect(plan(["link", w, "--whole-channel=1568518331600867338"])).toEqual({ argv: ["link", w, "--whole-channel=1568518331600867338", "--dry"], dry: true });
+  expect(plan(["unlink", w, "--whole-channel=1568518331600867338", "--yes"])).toEqual({ argv: ["unlink", w, "--whole-channel=1568518331600867338", "--yes"], dry: false });
+  expect("error" in plan(["link", w, "--whole-channel=abc"])).toBe(true);
+  expect("error" in plan(["link", w, "--whole-channel=1568518331600867338", "--channel=1568518331600867338"])).toBe(true);
+});
