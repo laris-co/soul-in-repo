@@ -30,14 +30,19 @@ git clone git@github.com:laris-co/soul-in-repo.git ~/.claude/skills/soul-in-repo
 
 Built 2026-11-05/06 by Laris Labs Oracle (AI) with Nat in #research › repo-soul.
 
-## /herdr-soul — one skill, five verbs (2026-11-07)
+## /herdr-soul — one skill, six verbs (2026-11-07)
 
 ```bash
 bin/herdr-soul list | ls [repo] | check <oracle> [repo] | in <oracle> [repo] [--dry] | out <oracle> [repo] [--go]
+bin/herdr-soul ears <oracle> [repo] [ls | add <thread> [--all] | rm <thread>] [--go]
 ```
 
 Skill: `skills/herdr-soul/SKILL.md` (install: `ln -s <this repo>/skills/herdr-soul ~/.claude/skills/herdr-soul`).
 `in` calls `check`, then `soul-in-repo.sh`. `in` and `out --go` touch the Laris access file: terminal go only.
+`ls` lists every room row of each soul, layout-9 thread first (#9). `ears <oracle>` shows the same body's threads
+with joined.json too (office is "every line (joined)" when it joined on a tag), old #repo rows last. `ears add|rm` is a plan unless `--go`; it runs
+`bin/soul-ears` (Somsri Oracle's tool, copied unchanged) on that body's own access.json, backup `.bak-<ts>-ears` first.
+
 `in` also passes `--migrate`, `--deny-main` and `--chname=dash` through to `soul-in-repo.sh` (with `--migrate` it skips `check`, since the body is already in).
 
 ## maw soul — the same verbs from any folder (2026-11-07)
@@ -47,12 +52,13 @@ maw soul list | ls [repo] | check <oracle> [repo]
 maw soul in <oracle> [repo] [--deny-main] [--chname=dash] [--yes]
 maw soul migrate <oracle> [repo] [--deny-main] [--chname=dash] [--yes]
 maw soul out <oracle> [repo] [--yes]
+maw soul ears <oracle> [repo] [add|rm <thread>] [--all] [--yes]
 ```
 
 A thin maw plugin in `maw-plugin/`: every verb runs `bin/herdr-soul`, nothing is copied. The herdr plugin `laris.soul`
 (`plugin/`) calls the same script, so all three fronts stay the same.
 
-- `in`, `migrate` and `out` print the plan (`--dry`) unless `--yes` is given. They write access rows, so `--yes` is for
+- `in`, `migrate`, `out` and `ears add|rm` print the plan (`--dry`) unless `--yes` is given. They write access rows, so `--yes` is for
   Nat's go from a terminal only. The plan ends with the exact `--yes` line to run.
 - `neo` means `neo-oracle`.
 - Install: `ln -s <this repo>/maw-plugin ~/.maw/plugins/soul` (then `maw soul help`). Tests: `cd maw-plugin && bun test`.

@@ -46,6 +46,31 @@ test("layout 9 flags pass through to in / migrate only", () => {
   expect("error" in plan(["out", "neo", "--chname=dash"])).toBe(true);
 });
 
+test("ears: ls reads, add|rm are a plan unless --yes", () => {
+  const T = "1568526565242044558";
+  expect(plan(["ears", "neo"])).toEqual({ argv: ["ears", "neo-oracle"], dry: false });
+  expect(plan(["ears", "neo", "laris-co/x"])).toEqual({ argv: ["ears", "neo-oracle", "laris-co/x"], dry: false });
+  expect(plan(["ears", "neo", "laris-co/x", "ls"])).toEqual({ argv: ["ears", "neo-oracle", "laris-co/x"], dry: false });
+  expect(plan(["ears", "neo", "add", T])).toEqual({ argv: ["ears", "neo-oracle", "add", T], dry: true });
+  expect(plan(["ears", "neo", "laris-co/x", "add", T, "--all"])).toEqual({ argv: ["ears", "neo-oracle", "laris-co/x", "add", T, "--all"], dry: true });
+  expect(plan(["ears", "pulse", "laris-co/x", "add", T, "--all", "--yes"])).toEqual({ argv: ["ears", "pulse-oracle", "laris-co/x", "add", T, "--all", "--go"], dry: false });
+  expect(plan(["ears", "neo", "rm", T, "--yes"])).toEqual({ argv: ["ears", "neo-oracle", "rm", T, "--go"], dry: false });
+  expect(plan(["ears", "neo", "rm", T, "--yes", "--dry"])).toEqual({ argv: ["ears", "neo-oracle", "rm", T], dry: true });
+});
+
+test("ears: errors name the fix", () => {
+  const err = (a: string[]) => (plan(a) as { error: string }).error;
+  expect(err(["ears"])).toContain("maw soul ears <oracle>");
+  expect(err(["ears", "neo", "add"])).toContain("maw soul ears neo add <thread id>");
+  expect(err(["ears", "neo", "add", "abc"])).toContain("<thread id>");
+  expect(err(["ears", "neo", "rm", "1568526565242044558", "--all"])).toContain("--all goes with ears add");
+  expect(err(["ears", "neo", "--all"])).toContain("--all and --yes go with ears add|rm");
+  expect(err(["ears", "neo", "--deny-main"])).toContain("do not go with ears");
+  expect(err(["ears", "neo", "--bot=x"])).toContain("do not go with ears");
+  expect(err(["in", "neo", "--all"])).toContain("--all goes with ears add");
+  expect(err(["ears", "neo", "a/b", "c/d"])).toContain("too many words");
+});
+
 test("room: many souls, plan unless --yes, channel pin passes through", () => {
   expect(plan(["room", "laris-co/nongbua-oracle", "neo", "digger-oracle"])).toEqual({ argv: ["room", "laris-co/nongbua-oracle", "neo-oracle", "digger-oracle", "--dry"], dry: true });
   expect(plan(["room", "laris-co/x", "neo", "--channel=1567747387102072912", "--yes"])).toEqual({ argv: ["room", "laris-co/x", "neo-oracle", "--channel=1567747387102072912", "--yes"], dry: false });

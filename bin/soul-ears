@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""soul-ears — add, remove or list the Discord threads a soul body hears.
+
+Works on ONE body's own access file: <body>/.discord/access.json (default body = current directory).
+Run it from inside the body (each body edits only its own .discord/), or pass --body for a dry look.
+
+  soul-ears ls                                   # threads this body hears (access.json + joined.json)
+  soul-ears add <thread_id> [--all] [--note TXT] [--dry]
+  soul-ears rm  <thread_id> [--dry]              # entry kept under "removed" (Nothing is Deleted)
+
+  --all     hear every line (requireMention false). Default: answer only when tagged.
+  --body P  path of the body (worktree) instead of the current directory.
+
+allowFrom is always Nat + catbutter. A backup access.json.bak-<ts>-ears is written beside the file
+before any change. Access changes need a go from Nat or catbutter in the terminal, never a chat line.
+Built by Somsri Oracle (AI), 2026-11-07 (laris-co/somsri-oracle bin/soul-ears); copied here unchanged
+except this line so herdr-soul ears / maw soul ears can call it.
+"""
+import argparse, datetime, json, os, shutil, sys
+
+HUMANS = ["691531480689541170", "917019242094817301"]  # Nat, catbutter
+
+
+def load(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def save(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    os.replace(tmp, path)
+
+
+def main():
+    p = argparse.ArgumentParser(prog="soul-ears", description=__doc__.split("\n")[0])
+    p.add_argument("verb", choices=["ls", "add", "rm"])
+    p.add_argument("thread", nargs="?")
+    p.add_argument("--all", action="store_true", help="hear every line (no tag needed)")
+    p.add_argument("--note", default="")
+    p.add_argument("--body", default=os.getcwd())
+    p.add_argument("--dry", action="store_true")
+    a = p.parse_args()
+
+    path = os.path.join(os.path.abspath(a.body), ".discord", "access.json")
+    if not os.path.isfile(path):
+        sys.exit(f"✗ no access file: {path}")
+    data = load(path)
+    groups = data.setdefault("groups", {})
+
+    if a.verb == "ls":
+        # joined.json: threads the plugin joined on a tag (tag-to-join). A joined thread is heard
+        # on every line even when access.json says tag only; `!kick @bot` in the thread undoes it.
+        jpath = os.path.join(os.path.dirname(path), "joined.json")
+        joined = []
+        if os.path.isfile(jpath):
+            try:
+                j = load(jpath)
+                joined = [str(x) for x in (j if isinstance(j, list) else j.keys())]
+            except (ValueError, OSError) as e:
+                print(f"  ! joined.json unreadable: {e}")
+        print(path)
+        for tid, g in groups.items():
+            if g.get("requireMention") is False:
+                mode = "every line"
+            elif tid in joined:
+                mode = "every line (joined)"
+            else:
+                mode = "tag only"
+            print(f"  {tid}  {mode:19}  {g.get('note', '')}")
+        for tid in joined:
+            if tid not in groups:
+                print(f"  {tid}  {'joined, no access':19}  in joined.json, no access row here")
+        print(f"joined.json: {', '.join(joined) if joined else 'none'}")
+        return
+
+    if not a.thread or not a.thread.isdigit():
+        sys.exit("✗ thread id (digits) required")
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    if a.verb == "add":
+        entry = {
+            "requireMention": not a.all,
+            "allowFrom": HUMANS,
+            "note": a.note or f"soul-ears add {stamp} ({'every line' if a.all else 'tag only'})",
+        }
+        if groups.get(a.thread) == entry:
+            print(f"= {a.thread} already there, same settings")
+            return
+        old = groups.get(a.thread)
+        groups[a.thread] = entry
+        action = "updated" if old else "added"
+    else:
+        if a.thread not in groups:
+            print(f"= {a.thread} not in groups")
+            return
+        data.setdefault("removed", {})[a.thread] = dict(groups.pop(a.thread), removedAt=stamp)
+        action = "removed (kept under 'removed')"
+
+    print(f"{'[dry] ' if a.dry else ''}{a.thread} {action} in {path}")
+    print(json.dumps(groups.get(a.thread) or data["removed"][a.thread], ensure_ascii=False))
+    if a.dry:
+        return
+    bak = f"{path}.bak-{stamp}-ears"
+    shutil.copy2(path, bak)
+    save(path, data)
+    load(path)  # read back: must still parse
+    print(f"✓ saved · backup {bak}")
+
+
+if __name__ == "__main__":
+    main()
