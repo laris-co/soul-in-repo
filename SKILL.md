@@ -1,6 +1,6 @@
 ---
 name: soul-in-repo
-description: Put an oracle's SOUL to work inside ANOTHER repo, with a Discord thread — layout 9 (2026-11-07): ONE channel per repo named <owner>∕<repo>, ONE thread per oracle named <oracle>, opened by that oracle's own bot (hears every line there), body = worktree <repo>/wt/<oracle>-soul (or the repo's main checkout with --main), Laris Labs keeps one row per repo channel and answers only when tagged. Use when Nat says "soul in repo", "wt <repo> using <oracle>", "neo works on <repo>", "channel = soul, thread = repo", or asks to repeat the nongbua/aiexpo/gods-eye setup ("channel = soul" was the 2026-11-05 layout; #repo › owner/repo the morning of 2026-11-07; layout 9 since 06:34Z). Do NOT use for a member's normal team body (`just wt`) or a Laris room body (`just room`).
+description: Put an oracle's SOUL to work inside ANOTHER repo, with a Discord thread — layout 9 (2026-11-07): ONE channel per repo named <owner>∕<repo>, ONE thread per oracle named <oracle>, opened by that oracle's own bot (hears every line there), body = worktree <repo>/wt/<oracle>-soul, Laris Labs keeps one row per repo channel and answers only when tagged; Somsri (soul center, #somsri) reads repo channels with eyes and answers only when tagged. Use when Nat says "soul in repo", "wt <repo> using <oracle>", "neo works on <repo>", "channel = soul, thread = repo", or asks to repeat the nongbua/aiexpo/gods-eye setup ("channel = soul" was the 2026-11-05 layout; #repo › owner/repo the morning of 2026-11-07; layout 9 since 06:34Z). Do NOT use for a member's normal team body (`just wt`) or a Laris room body (`just room`).
 ---
 
 # /soul-in-repo — channel = <owner>∕<repo>, thread = <oracle> (layout 9)
@@ -19,15 +19,16 @@ Diagram: `laris-labs-oracle/ψ/lab/2026-11-05_one-bot-many-repos/D1-soul-repo-mo
 ```
 <owner>∕<repo>  (channel = the repo; found by name, created once under one category, never a second one)
   |- neo-oracle      (thread opened by the Neo bot: Neo hears every line, requireMention false)
-  |- pulse-oracle    (thread opened by the Pulse bot)
-  `- somsri-oracle   (the repo's MAIN body, --main)
+  `- pulse-oracle    (thread opened by the Pulse bot)
+        repo channels hold ONLY soul threads. Somsri (soul center, home laris-co/somsri-oracle, room #somsri) is not
+        a soul here: she reads with eyes and answers only when tagged (her own access file, not this script)
         Laris Labs Oracle: one row on the CHANNEL, requireMention true -> hears tags only, never types
         Laris row: {"layout": 9, "channel", "repo", "souls": [...], "threads": {oracle: thread}}
-body: <repo>/wt/<oracle>-soul  branch soul/<oracle>     (--main: the repo root itself, no worktree)
+body: <repo>/wt/<oracle>-soul  branch soul/<oracle>
       soul  = <oracle>/CLAUDE.md, appended at start (--append-system-prompt)
       ears  = DISCORD_STATE_DIR=<body>/.discord  access.json: its own thread, requireMention false
-      note  = CLAUDE.local.md in the worktree; with --main .discord/body-layout.md appended by launch.sh
-              (never CLAUDE.local.md in a main checkout: Claude Code reads it from parent folders, so every soul in wt/ would too)
+      note  = CLAUDE.local.md in the worktree (never in a repo's main checkout: Claude Code reads it from parent
+              folders, so every soul in wt/ would take it as its own)
       name  = DISCORD_ORACLE=<oracle>  (state dir is .discord, so the plugin cannot guess the oracle from it)
       start = <wt>/.discord/launch.sh  (bot + Claude token from pass at launch)
 ```
@@ -43,13 +44,12 @@ If the repo name is ambiguous (three "god eyes" repos), list the candidates with
 S=~/.claude/skills/soul-in-repo/soul-in-repo.sh
 $S neo-oracle laris-co/oracle-gods-eys-os --dry     # plan only
 $S neo-oracle laris-co/oracle-gods-eys-os           # channel owner∕repo, thread neo-oracle, humans, worktree, files, pane, Laris row
-$S somsri-oracle laris-co/soul-in-repo --main --dry # the repo's main checkout as the body (no worktree, no pane)
 ```
 
 Restart a body later with `RESUME=1 <wt>/.discord/launch.sh` (keeps its conversation).
 
-Move a LIVE body (any older layout) to its layout-9 thread: `$S <oracle> <owner>/<repo> --migrate --dry` (add `--main`
-for a main-checkout body), then without `--dry`. It rewrites access.json, launch.sh and the soul note (backups
+Move a LIVE body (any older layout) to its layout-9 thread: `$S <oracle> <owner>/<repo> --migrate --dry`, then
+without `--dry`. It rewrites access.json, launch.sh and the soul note (backups
 `.bak-<ts>-migrate`) and the Laris rows: the channel row gains the soul; the old thread row is kept, the soul leaves its
 `souls[]`, and once none is left the row gets note "moved to layout 9" and requireMention true. It never opens a pane or
 starts claude: re-running the plain script on a live body starts a second claude on the same bot token (rival gateway).

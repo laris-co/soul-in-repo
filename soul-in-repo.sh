@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# soul-in-repo.sh <oracle> <repo> [--category <id>] [--chname slash|dash] [--migrate] [--deny-main] [--main] [--dry]
+# soul-in-repo.sh <oracle> <repo> [--category <id>] [--chname slash|dash] [--migrate] [--deny-main] [--dry]
 #   Layout 9 (Nat 2026-11-07 06:34Z, #research › repo-soul): ONE channel per repo, named <owner>∕<repo>
 #   (U+2215 DIVISION SLASH; --chname dash or CHNAME=dash gives <owner>-<repo>), ONE thread per oracle, named <oracle>,
 #   opened by THAT oracle's own bot. Own thread: the soul hears every line untagged. Laris Labs Oracle keeps one row per
@@ -12,27 +12,23 @@
 #   --deny-main  also write { deny: true, earsOff: true } for the repo channel into the oracle's MAIN body
 #                access.local.json, so a main body sharing the bot never hears or joins the soul threads. Local machine:
 #                written here (backup); main body on another machine: prints the herdr --machine prompt for its agent.
-#   --main       the repo's MAIN checkout is the body (e.g. Somsri in soul-in-repo): .discord/ in the repo root, the body
-#                note goes to .discord/body-layout.md and is appended by launch.sh. Never CLAUDE.local.md: Claude Code reads
-#                it from parent folders, so every soul in wt/ would take it as its own.
 #   <oracle>  e.g. neo-oracle  (soul = config.yaml soul: or $(ghq root)/github.com/laris-co/<oracle>, bot = pass discord/<oracle>-token)
 #   <repo>    owner/name (in ghq) or an absolute path
 # Builds: channel <owner>∕<repo> (find by name or create, never a second one) -> thread <oracle> (the soul's bot finds,
-# reuses + unarchives, or opens it) -> humans -> worktree <repo>/wt/<oracle>-soul (not with --main) -> .discord/{access.json,
+# reuses + unarchives, or opens it) -> humans -> worktree <repo>/wt/<oracle>-soul -> .discord/{access.json,
 # launch.sh} + soul note -> own herdr space under the repo -> Laris channel row -> hello.
 # Runs on the machine of the Laris host bot (m5 today). Tokens only from pass, never printed.
 set -euo pipefail
 oracle=${1:?oracle}; repo=${2:?repo}; shift 2
 CAT=${SOUL_CATEGORY:-1560847801838215259}   # 🔬・research category
 CHNAME=${CHNAME:-slash}
-DRY=0; MIG=0; DENYMAIN=0; MAIN=0
+DRY=0; MIG=0; DENYMAIN=0
 while (( $# )); do case $1 in
   --category) CAT=$2; shift 2;; --chname) CHNAME=$2; shift 2;; --chname=*) CHNAME=${1#*=}; shift;;
-  --dry) DRY=1; shift;; --migrate) MIG=1; shift;; --deny-main) DENYMAIN=1; shift;; --main) MAIN=1; shift;;
-  *) echo "unknown $1"; echo "  usage: $0 <oracle> <repo> [--category <id>] [--chname slash|dash] [--migrate] [--deny-main] [--main] [--dry]"; exit 2;; esac; done
+  --dry) DRY=1; shift;; --migrate) MIG=1; shift;; --deny-main) DENYMAIN=1; shift;;
+  *) echo "unknown $1"; echo "  usage: $0 <oracle> <repo> [--category <id>] [--chname slash|dash] [--migrate] [--deny-main] [--dry]"; exit 2;; esac; done
 [[ $CHNAME = (slash|dash) ]] || { echo "--chname is slash or dash, not '$CHNAME'"; echo "  $0 $oracle $repo --chname dash --dry"; exit 2; }
-(( MAIN && DENYMAIN )) && { echo "--deny-main keeps a MAIN body out of the soul threads; with --main the main body IS the soul"; echo "  $0 $oracle $repo --main --dry"; exit 2; }
-FL=""; (( MIG )) && FL+=" --migrate"; (( MAIN )) && FL+=" --main"   # flags to repeat in a printed fix line
+FL=""; (( MIG )) && FL+=" --migrate"   # flags to repeat in a printed fix line
 GUILD=1560847800881643520
 NAT=691531480689541170; CB=917019242094817301
 TEAM=/opt/Code/github.com/laris-co/laris-team
@@ -42,7 +38,7 @@ soul=${HERDR_SOUL_DIR:-$ghq/github.com/laris-co/$oracle}
 [[ $repo = /* ]] && R=$repo || R=$ghq/github.com/$repo
 [[ -d $R/.git || -f $R/.git ]] || { echo "not a repo: $R"; exit 1; }
 name=${R:t}
-(( MAIN )) && W=$R || W=$R/wt/$oracle-soul
+W=$R/wt/$oracle-soul
 # <owner>/<repo> from origin (github ssh or https), else from the ghq path
 full=$(git -C $R remote get-url origin 2>/dev/null | sed -E 's#^(git@[^:]+:|[a-z+]+://[^/]+/)##; s#\.git$##')
 [[ $full = */* ]] || full=${R#$ghq/github.com/}
@@ -54,18 +50,17 @@ cfg=$TEAM/oracles/$oracle/config.yaml
 ctok=$(sed -n 's/^claude_token: *\([^ #]*\).*/\1/p' $cfg 2>/dev/null | head -1); ctok=${ctok:-t3}
 pass show discord/$oracle-token >/dev/null || { echo "no pass discord/$oracle-token"; exit 1; }
 pass show claude/token-$ctok >/dev/null || { echo "no pass claude/token-$ctok"; exit 1; }
-(( MAIN )) || git -C $R check-ignore -q wt/ || { echo "wt/ is not ignored in $R: add it to .gitignore first"; echo "  echo wt/ >> $R/.gitignore && git -C $R commit -m 'ignore wt/' .gitignore"; exit 1; }
-NOTE=$( (( MAIN )) && echo "$W/.discord/body-layout.md (appended by launch.sh)" || echo "$W/CLAUDE.local.md")
+git -C $R check-ignore -q wt/ || { echo "wt/ is not ignored in $R: add it to .gitignore first"; echo "  echo wt/ >> $R/.gitignore && git -C $R commit -m 'ignore wt/' .gitignore"; exit 1; }
+NOTE=$W/CLAUDE.local.md
 echo "plan: channel '$CHN' (layout 9, find by name under category $CAT or create; never a second one)"
 echo "      thread '$oracle' in it, found/reused/unarchived or opened by the $oracle bot (own thread); humans Nat + catbutter"
-if (( MAIN )); then echo "      body: MAIN checkout $W (no worktree) · bot $oracle · claude $ctok · DISCORD_ORACLE=$oracle"
-else echo "      worktree $W (branch soul/$oracle) · bot $oracle · claude $ctok · DISCORD_ORACLE=$oracle"; fi
+echo "      worktree $W (branch soul/$oracle) · bot $oracle · claude $ctok · DISCORD_ORACLE=$oracle"
 echo "      ears: thread '$oracle', requireMention false (its own thread) · eyes: guild read-only · note: $NOTE"
 echo "      Laris row: the CHANNEL '$CHN', requireMention true (hears tags only), souls[] += $oracle, threads{$oracle}"
 S=${HERDR_SESSION:-laris-co}
 OLD=""; P=""
 if (( MIG )); then
-  [[ -f $W/.discord/access.json ]] || { echo "migrate: no live body at $W (no .discord/access.json)"; echo "  build it instead: $0 $oracle $repo$( (( MAIN )) && echo " --main")"; exit 1; }
+  [[ -f $W/.discord/access.json ]] || { echo "migrate: no live body at $W (no .discord/access.json)"; echo "  build it instead: $0 $oracle $repo"; exit 1; }
   OLD=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),""))' $W/.discord/access.json)
   # the pane that runs this body now (herdr pane list, matched on cwd)
   P=$(herdr --session $S pane list 2>/dev/null | python3 -c 'import json,sys
@@ -128,11 +123,11 @@ else
 fi
 # 2b. add the humans to the thread (Nat 2026-11-05: "When new thread add human")
 for u in $NAT $CB; do sapi -o /dev/null -w "add human $u %{http_code}\n" -X PUT https://discord.com/api/v10/channels/$TH/thread-members/$u; done
-# 3. worktree (not with --main) + backups of what a migrate rewrites (Nothing is Deleted)
+# 3. worktree + backups of what a migrate rewrites (Nothing is Deleted)
 if (( MIG )); then
   ts=$(date +%Y%m%d-%H%M%S)
-  for f in $W/.discord/access.json $W/.discord/launch.sh ${NOTE%% *}; do [[ -f $f ]] && cp -p $f $f.bak-$ts-migrate; done
-elif (( ! MAIN )); then
+  for f in $W/.discord/access.json $W/.discord/launch.sh $NOTE; do [[ -f $f ]] && cp -p $f $f.bak-$ts-migrate; done
+else
   git -C $R fetch -q origin main 2>/dev/null || true
   [[ -d $W ]] || git -C $R worktree add -q -b soul/$oracle $W origin/main 2>/dev/null || git -C $R worktree add -q $W soul/$oracle
 fi
@@ -144,7 +139,7 @@ cat > $W/.discord/access.json <<J
   "guilds": { "$GUILD": { "requireMention": true, "allowFrom": ["eyes-only"],
     "note": "auto read allowlist: fetch any room in the guild; allowFrom matches no one, so nothing outside the thread is heard" } } }
 J
-BODY=$( (( MAIN )) && echo "the MAIN checkout of $full ($W)" || echo "the repo $full (worktree $W, branch soul/$oracle)")
+BODY="the repo $full (worktree $W, branch soul/$oracle)"
 note_text() { cat <<MD
 # $oracle in $full (written by soul-in-repo.sh, layout 9: channel '$CHN', thread '$oracle')
 
@@ -163,15 +158,8 @@ Your soul ($soul/CLAUDE.md) is appended at start. The repo's own files are the p
 MD
 }
 ex=$(git -C $R rev-parse --git-common-dir)/info/exclude
-if (( MAIN )); then
-  note_text > $W/.discord/body-layout.md
-  for l in .discord/; do grep -qxF $l $ex 2>/dev/null || echo $l >> $ex; done
-  APPEND="cat '$soul/CLAUDE.md'; [ -f '$W/.discord/body.md' ] && { echo; cat '$W/.discord/body.md'; }; echo; cat '$W/.discord/body-layout.md'"
-else
-  note_text > $W/CLAUDE.local.md
-  for l in .discord/ CLAUDE.local.md 'CLAUDE.local.md.bak-*'; do grep -qxF $l $ex 2>/dev/null || echo $l >> $ex; done
-  APPEND="cat '$soul/CLAUDE.md'"
-fi
+note_text > $W/CLAUDE.local.md
+for l in .discord/ CLAUDE.local.md 'CLAUDE.local.md.bak-*'; do grep -qxF $l $ex 2>/dev/null || echo $l >> $ex; done
 cat > $W/.discord/launch.sh <<L
 #!/bin/zsh
 cd '$W'
@@ -180,10 +168,10 @@ export DISCORD_ORACLE=$oracle
 export DISCORD_BOT_TOKEN="\$(pass show discord/$oracle-token | head -1)"
 export CLAUDE_CODE_OAUTH_TOKEN="\$(pass show claude/token-$ctok | head -1)"
 export CLAUDE_TOKEN_NAME=$ctok
-exec claude --dangerously-skip-permissions --channels=plugin:discord@claude-plugins-official \${RESUME:+--continue} --append-system-prompt "\$($APPEND)"
+exec claude --dangerously-skip-permissions --channels=plugin:discord@claude-plugins-official \${RESUME:+--continue} --append-system-prompt "\$(cat '$soul/CLAUDE.md')"
 L
 chmod +x $W/.discord/launch.sh
-if (( ! MIG && ! MAIN )); then
+if (( ! MIG )); then
 # 4. pre-trust the new folder (same as tools/laris-wt.sh)
 python3 - $W <<'PY'
 import json, os, sys
@@ -252,11 +240,6 @@ if (( MIG )); then
   echo "     (bottom 2 lines only: claude's status bar while it runs, the fresh prompt after exit; timeout = stop, read the pane, send nothing)"
   echo "  4. restart: herdr pane run ${P:-<pane>} 'RESUME=1 $W/.discord/launch.sh'"
   echo "  5. herdr pane wait-output ${P:-<pane>} --regex 'bypass permissions' --source visible --lines 3 --timeout 60000   (claude is back)"
-  exit 0
-fi
-if (( MAIN )); then
-  echo "done: '$CHN' ($CH) › '$oracle' ($TH) · main checkout $W"
-  echo "next: start it in the repo's main pane: herdr pane run <pane> '$W/.discord/launch.sh'"
   exit 0
 fi
 echo "done: '$CHN' ($CH) › '$oracle' ($TH) · $W · pane $P"

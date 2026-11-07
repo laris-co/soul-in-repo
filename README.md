@@ -4,8 +4,8 @@ Put an oracle's **soul** to work inside **another repo**, in that repo's Discord
 
 ```
 <owner>∕<repo>        one channel per repo (U+2215; --chname dash: <owner>-<repo>)
-  ├─ neo-oracle       one thread per oracle, opened by its own bot
-  └─ somsri-oracle    the repo's main checkout (--main)
+  ├─ neo-oracle       one thread per oracle, opened by its own bot (soul threads only)
+  └─ pulse-oracle     Somsri (soul center, #somsri) reads with eyes, answers when tagged
 body: <repo>/wt/<oracle>-soul   (branch soul/<oracle>)
 ears: its own thread, every line     eyes: every room the bot can see     Laris: tags only
 ```
@@ -18,7 +18,7 @@ The script finds or creates the `<owner>∕<repo>` channel (never a second one),
 Tokens come from `pass` at launch and never touch this repo.
 
 Layout 9 since 2026-11-07 06:34Z (Nat): channel `<owner>∕<repo>` › thread `<oracle>`. Before it: #repo › `<owner>/<repo>`
-(soul-in-repo's Neo, Pulse, Somsri; move with `--migrate`). Before that, channel = oracle threads: #neo-oracle › nongbua-oracle, oracle-gods-eys-os, esp32-line-beacon, soul-in-repo (m5) ·
+(soul-in-repo's Neo and Pulse; move with `--migrate`). Before that, channel = oracle threads: #neo-oracle › nongbua-oracle, oracle-gods-eys-os, esp32-line-beacon, soul-in-repo (m5) ·
 #pulse-oracle › soul-in-repo (m5) · #calliope-oracle › aiexpo-oracle (white) · #digger-oracle › theognosis (white).
 They stay as they are until each is rebuilt; old threads get archived, never deleted.
 
@@ -38,14 +38,14 @@ bin/herdr-soul list | ls [repo] | check <oracle> [repo] | in <oracle> [repo] [--
 
 Skill: `skills/herdr-soul/SKILL.md` (install: `ln -s <this repo>/skills/herdr-soul ~/.claude/skills/herdr-soul`).
 `in` calls `check`, then `soul-in-repo.sh`. `in` and `out --go` touch the Laris access file: terminal go only.
-`in` also passes `--migrate`, `--deny-main`, `--main` and `--chname=dash` through to `soul-in-repo.sh` (with `--migrate` it skips `check`, since the body is already in).
+`in` also passes `--migrate`, `--deny-main` and `--chname=dash` through to `soul-in-repo.sh` (with `--migrate` it skips `check`, since the body is already in).
 
 ## maw soul — the same verbs from any folder (2026-11-07)
 
 ```bash
 maw soul list | ls [repo] | check <oracle> [repo]
-maw soul in <oracle> [repo] [--deny-main] [--main] [--chname=dash] [--yes]
-maw soul migrate <oracle> [repo] [--deny-main] [--main] [--chname=dash] [--yes]
+maw soul in <oracle> [repo] [--deny-main] [--chname=dash] [--yes]
+maw soul migrate <oracle> [repo] [--deny-main] [--chname=dash] [--yes]
 maw soul out <oracle> [repo] [--yes]
 ```
 

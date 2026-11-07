@@ -4,7 +4,7 @@
 #   herdr-soul ls    [repo]              souls living in a repo: worktree, thread, pane, gateway ready?
 #   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
 #   herdr-soul in    <oracle> [repo]     check, then soul-in-repo.sh (channel, thread, worktree, space, Laris row, hello)
-#                                        --migrate / --deny-main / --main / --chname=dash are passed through to soul-in-repo.sh
+#                                        --migrate / --deny-main / --chname=dash are passed through to soul-in-repo.sh
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
 #                                        archives the thread only when no soul is left
 # Laris rows, newest first. layout 9 (2026-11-07 06:34Z): one row per repo CHANNEL (<owner>∕<repo>), "layout": 9,
@@ -19,7 +19,7 @@ LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 DRY=0; GO=0; ARGS=(); PASS=()   # PASS = flags handed to soul-in-repo.sh by `in`
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main|--main|--chname=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --migrate|--deny-main|--chname=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -80,10 +80,8 @@ ls)
   where_all=$(rows)
   found=0
   git -C $R worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r W; do
-    if [[ $W = */wt/*-soul ]]; then o=${${W:t}%-soul}
-    elif [[ $W = $R && -f $W/.discord/launch.sh ]]; then o=$(sed -n 's/^export DISCORD_ORACLE=//p' $W/.discord/launch.sh | head -1)" (main)"
-    else continue; fi
-    found=1
+    [[ $W = */wt/*-soul ]] || continue; found=1
+    o=${${W:t}%-soul}
     th=$(python3 -c 'import json,sys;print(next(iter(json.load(open(sys.argv[1])).get("groups",{})),"-"))' $W/.discord/access.json 2>/dev/null || echo -)
     ready=$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1]));print("ready" if d.get("gateway",{}).get("ready") else "not ready")' $W/.discord/status.json 2>/dev/null || echo "no status")
     pane=$(herdr pane list 2>/dev/null | python3 -c 'import json,sys
@@ -92,7 +90,7 @@ try:
   ps=json.load(sys.stdin)["result"]["panes"]
   print(next((p["pane_id"] for p in ps if (p.get("foreground_cwd") or p.get("cwd"))==w),"-"))
 except Exception: print("-")' $W)
-    lay=$(print -r -- $where_all | awk -v t=$th -v o=${o% (main)} '$1==t && $3==o{print $2}' | head -1)
+    lay=$(print -r -- $where_all | awk -v t=$th -v o=$o '$1==t && $3==o{print $2}' | head -1)
     case $lay in l9) lay="layout 9";; repo) lay="#repo layout";; old) lay="old layout";; esac
     echo "  $o  thread $th${lay:+ ($lay)}  pane $pane  gateway $ready  ($W)"
   done

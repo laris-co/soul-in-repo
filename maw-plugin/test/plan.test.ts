@@ -37,8 +37,9 @@ test("help", async () => {
 });
 
 test("layout 9 flags pass through to in / migrate only", () => {
-  expect(plan(["migrate", "somsri", "laris-co/x", "--main"])).toEqual({ argv: ["in", "somsri-oracle", "laris-co/x", "--migrate", "--main", "--dry"], dry: true });
+  expect(plan(["migrate", "pulse", "laris-co/x", "--chname=dash"])).toEqual({ argv: ["in", "pulse-oracle", "laris-co/x", "--migrate", "--chname=dash", "--dry"], dry: true });
+  expect((plan(["in", "neo", "--main"]) as { error: string }).error).toContain("unknown flag --main");
   expect(plan(["in", "neo", "laris-co/x", "--chname=dash", "--yes"])).toEqual({ argv: ["in", "neo-oracle", "laris-co/x", "--chname=dash"], dry: false });
   expect("error" in plan(["in", "neo", "--chname=weird"])).toBe(true);
-  expect("error" in plan(["out", "neo", "--main"])).toBe(true);
+  expect("error" in plan(["out", "neo", "--chname=dash"])).toBe(true);
 });
