@@ -135,3 +135,21 @@ test("--thread on link and wt: an existing thread, ids only, not with --whole-ch
   expect("error" in plan(["unlink", w, "--thread=1568526565242044558"])).toBe(true);
   expect("error" in plan(["wt-close", "a", "--thread=1568526565242044558"])).toBe(true);
 });
+
+test("promote: a thread id, then oracles; plan unless --yes", () => {
+  const T = "1568876528010268692";
+  expect(plan(["promote", T])).toEqual({ argv: ["promote", T, "--dry"], dry: true });
+  expect(plan(["promote", T, "neo", "pulse-oracle"])).toEqual({ argv: ["promote", T, "neo-oracle", "pulse-oracle", "--dry"], dry: true });
+  expect(plan(["promote", T, "neo", "--name=esp32-beacon", "--owner=laris-co", "--public", "--yes"]))
+    .toEqual({ argv: ["promote", T, "neo-oracle", "--owner=laris-co", "--name=esp32-beacon", "--public", "--yes"], dry: false });
+  expect(plan(["promote", T, "--yes", "--dry"])).toEqual({ argv: ["promote", T, "--dry"], dry: true });
+  expect((plan(["promote"]) as { error: string }).error).toContain("maw soul promote <thread id>");
+  expect((plan(["promote", "esp32"]) as { error: string }).error).toContain("which thread?");
+  expect("error" in plan(["promote", T, "--channel=1568518331600867338"])).toBe(true);
+  expect("error" in plan(["promote", T, "--deny-main"])).toBe(true);
+  expect("error" in plan(["promote", T, "--bot=neo"])).toBe(true);
+  expect("error" in plan(["promote", T, "--repo=a/b"])).toBe(true);
+  expect("error" in plan(["promote", T, "--name=bad name"])).toBe(true);
+  expect("error" in plan(["promote", T, "--owner=-x"])).toBe(true);
+  expect((plan(["in", "neo", "--owner=laris-co"]) as { error: string }).error).toContain("--owner goes with promote");
+});

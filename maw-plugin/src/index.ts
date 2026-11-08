@@ -11,6 +11,7 @@
 //   maw soul room    <repo> <oracle>...    layout 9 for many souls: migrate a live body, else in; always --deny-main
 //   maw soul idea    <idea> <oracle>...    IDEA MODE: channel 💡・<idea>, a thread per soul, body = scratch dir
 //   maw soul convert <idea> --repo=o/r     idea -> repo: same channel (renamed 📦・o∕r), same threads, wt bodies
+//   maw soul promote <thread> [<oracle>...] a talk thread -> repo (origin/thread.md) + room 📦・o∕r + souls; archive it
 //   maw soul wt      <name> [repo]         worktree <repo>/wt/<name> + link (default bot laris-labs-oracle)
 //   maw soul wt-close <name> [repo]        unlink it, archive the thread, keep the worktree
 //   maw soul link    <wt-path>             a manual worktree joins an existing bot body by forward (no second gateway)
@@ -43,6 +44,12 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
                                         (its own bot), body <soul>/ψ/lab/<idea> (--dir=<base>), Laris row mode idea
   maw soul convert   <idea> --repo=<owner/repo> [--public]   plan; the idea becomes a repo (private by default):
                                         channel renamed 📦・<owner>∕<repo>, each soul rebuilt in <repo>/wt on the SAME thread
+  maw soul promote   <thread> [<oracle>...]   plan; a talk thread becomes a repo with its own room:
+                                        name from the thread (--name=<repo>), repo <owner>/<name> (--owner=, default
+                                        nat-build-with-oracle; private unless --public; reused if it exists),
+                                        origin/thread.md + messages.jsonl committed (secret scan first), channel
+                                        📦・<owner>∕<name> + Laris row, each <oracle> in with its own thread, then
+                                        '📦 moved to' in the thread and it is archived. Last line: RESULT repo= room=
   maw soul wt        <name> [repo]      plan; worktree <repo>/wt/<name> (branch wt/<name>, reused if there), then link:
                                         thread <name> in the repo's layout-9 channel (--channel=<id>), forward row,
                                         claude beside the bot body. --bot=<oracle> (default laris-labs-oracle).
@@ -69,7 +76,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   --yes   run it. These write access rows: only on Nat's go from a terminal.
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
-const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close"]);
+const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close", "promote"]);
 const READS = new Set(["list", "ls", "check"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
@@ -82,16 +89,29 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const chname = args.find(a => a.startsWith("--chname="));
   const pin = args.find(a => a.startsWith("--channel="));
   const all = args.includes("--all");
+  const owner = args.find(a => a.startsWith("--owner="));
   if (pin && !/^--channel=\d{15,22}$/.test(pin)) return { error: `${pin}: use --channel=<channel id>` };
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
   const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel|thread)=/.test(a));
   const ideaOpts = args.filter(a => /^--(dir|repo)=/.test(a) || a === "--public" || a === "--private");
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a));
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner);
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
   if (unknown) return { error: `unknown flag ${unknown}\n  maw soul help` };
   if (all && verb !== "ears") return { error: "--all goes with ears add, not " + verb };
+  if (owner && verb !== "promote") return { error: "--owner goes with promote, not " + verb };
+  if (verb === "promote") {
+    const th = pos[0];
+    if (!th || !/^\d{15,22}$/.test(th)) return { error: "which thread?\n  maw soul promote <thread id> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]" };
+    if (denyMain || chname || pin) return { error: "--deny-main, --chname and --channel do not go with promote (the room is found or made by name)" };
+    if (linkOpts.some(a => !a.startsWith("--name=")) || ideaOpts.some(a => /^--(dir|repo)=/.test(a))) return { error: "promote takes --owner=<owner>, --name=<repo>, --public or --private" };
+    const nm = linkOpts.find(a => a.startsWith("--name="));
+    if (nm && !/^--name=[A-Za-z0-9._-]{1,100}$/.test(nm)) return { error: `${nm}: a repo name is letters, digits, '.', '_' and '-'` };
+    if (owner && !/^--owner=[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner)) return { error: `${owner}: use --owner=<github owner>` };
+    const d = !yes || dryAsked;
+    return { argv: ["promote", th, ...pos.slice(1).map(oracleName), ...(owner ? [owner] : []), ...(nm ? [nm] : []), ...ideaOpts, ...(d ? ["--dry"] : ["--yes"])], dry: d };
+  }
   if (verb === "ears") return earsPlan(pos, yes && !dryAsked, all, !!(denyMain || chname || pin || linkOpts.length));
   if (READS.has(verb)) {
     if (verb === "check" && !pos[0]) return { error: "which oracle?\n  maw soul check <oracle> [repo]" };
