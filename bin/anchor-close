@@ -1,0 +1,22 @@
+#!/usr/bin/env zsh
+# anchor-close <repo path> [--dry] — close the repo's ANCHOR space when nothing is left under it (Nat 2026-11-08 "yes go fix",
+# issue #25 follow-up). An anchor is the herdr space at the repo's main checkout that soul-in-repo.sh / repo-space make so
+# soul and worktree spaces nest under the repo. It is closed only when: no linked worktree of the repo has an open space,
+# and no agent runs at the main checkout (an oracle whose body is that main keeps it). Prints what it did.
+set -euo pipefail
+R=${1:?repo path}; DRY=0; [[ ${2:-} = --dry ]] && DRY=1
+S=${HERDR_SESSION:-laris-co}
+info=$(herdr --session $S worktree list --cwd "$R" 2>/dev/null | python3 -c 'import json,sys
+try: d=json.load(sys.stdin)["result"]
+except Exception: print("-"); sys.exit()
+ws=d["source"].get("source_workspace_id") or "-"
+kids=[w["path"] for w in d.get("worktrees",[]) if w.get("is_linked_worktree") and w.get("open_workspace_id")]
+print(ws, len(kids))')
+ws=${info%% *}; kids=${info#* }
+[[ $ws = - ]] && { echo "anchor: no herdr space for ${R:t}"; exit 0; }
+(( kids )) && { echo "anchor: ${R:t} ($ws) kept: $kids worktree space(s) still open under it"; exit 0; }
+agent=$(herdr --session $S agent list 2>/dev/null | python3 -c 'import json,sys
+r=sys.argv[1]; print(next((a["pane_id"] for a in json.load(sys.stdin)["result"]["agents"] if a.get("cwd")==r),""))' "$R")
+[[ -n $agent ]] && { echo "anchor: ${R:t} ($ws) kept: an agent runs at main ($agent)"; exit 0; }
+(( DRY )) && { echo "anchor: ${R:t} ($ws) would close (nothing under it, no agent)"; exit 0; }
+herdr --session $S workspace close $ws >/dev/null && echo "  ✓ anchor ${R:t} ($ws) closed: nothing under it"

@@ -573,6 +573,7 @@ else: print("none")' $LARIS ${key:-x} $o)
   echo "  4. worktree stays: $dirty uncommitted, $ahead unpushed — remove later with: git -C $R worktree remove $W"
   (( GO )) || { echo "(plan only; add --go to do 1-3)"; exit 0; }
   [[ -n $pane ]] && herdr pane close $pane >/dev/null && echo "  ✓ pane closed"
+  zsh $HERE/anchor-close $R || true   # the repo's anchor space goes when this was the last space under it
   if [[ -n $th && $left != norow ]]; then
     cp $LARIS $LARIS.bak-$(date +%Y%m%d-%H%M%S)-soul-out
     python3 -c 'import json,sys
