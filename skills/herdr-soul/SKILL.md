@@ -40,10 +40,11 @@ Post the plan (`check` output + `in --dry` line) in the thread Nat is talking in
 
 | verb | changes | who says go |
 |---|---|---|
-| list, ls, check, in --dry, out, ears, ears add/rm (no --go) | nothing | anyone |
+| list, ls, check, threads, icon (no --go), in --dry, out, ears, ears add/rm (no --go) | nothing | anyone |
 | in, room --yes | Discord channel/thread, worktree, herdr space, **Laris access row** | Nat or catbutter |
 | link --yes, unlink --yes | a thread, the bot body's access row (forwardTo), a pane | Nat or catbutter |
 | out --go | closes a pane, removes an access row, archives a thread | Nat or catbutter |
+| icon --go | renames the soul's own thread (its own bot) | Nat or catbutter |
 | ears add/rm --go | the soul body's own `.discord/access.json` (backup first; rm keeps the row under "removed") | Nat or catbutter |
 
 Since 2026-11-07 a Discord line from Nat (691531480689541170) or catbutter (917019242094817301) counts the same as

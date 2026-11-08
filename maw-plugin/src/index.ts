@@ -16,6 +16,8 @@
 //   maw soul wt-close <name> [repo]        unlink it, archive the thread, keep the worktree
 //   maw soul link    <wt-path>             a manual worktree joins an existing bot body by forward (no second gateway)
 //   maw soul unlink  <wt-path>             archive its thread, drop the forward row (--whole-channel: + its deny rows)
+//   maw soul threads [repo]                which soul hears which thread (Discord names, GET only)
+//   maw soul icon    <oracle> [repo]       plan; --yes renames the soul's own thread to '<icon>・<oracle>' (--off removes)
 //   maw soul ears    <oracle> [repo] [ls]  threads the body hears; add|rm <thread> [--all]: plan, --yes writes
 //                                          (herdr-soul ears --go, which runs bin/soul-ears on the body's own access.json)
 //   --deny-main / --chname=dash on in / migrate: passed to soul-in-repo.sh (layout 9: channel per repo,
@@ -69,6 +71,9 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
                                         a row get {deny: true, linkedBy: <wt>} (listed in the plan)
   maw soul unlink    <wt-path>          plan; archive the thread, drop the forward row + its deny rows (backup).
                                         --bot=<oracle> --whole-channel=<id>
+  maw soul threads   [repo]             every thread the repo's souls hear: name, open/archived, who hears it
+  maw soul icon      <oracle> [repo]    plan; add --yes to rename the soul's own thread '<icon>・<oracle>'
+                                        (icon: from its config.yaml); --off takes the icon away
   maw soul ears      <oracle> [repo]    threads the body hears: own thread, office (joined), old rows
   maw soul ears      <oracle> [repo] add|rm <thread> [--all]
                                         plan; add --yes to write the body's access.json (backup first;
@@ -83,7 +88,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
 const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close", "promote", "archive"]);
-const READS = new Set(["list", "ls", "check"]);
+const READS = new Set(["list", "ls", "check", "threads"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
 
@@ -95,6 +100,7 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const chname = args.find(a => a.startsWith("--chname="));
   const pin = args.find(a => a.startsWith("--channel="));
   const all = args.includes("--all");
+  const off = args.includes("--off");
   const owner = args.find(a => a.startsWith("--owner="));
   const fresh = args.includes("--new");
   const unarch = args.includes("--unarchive");
@@ -103,11 +109,19 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
   const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel|thread)=/.test(a));
   const ideaOpts = args.filter(a => /^--(dir|repo)=/.test(a) || a === "--public" || a === "--private");
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new" && a !== "--unarchive" && a !== by);
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== "--off" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new" && a !== "--unarchive" && a !== by);
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
   if (unknown) return { error: `unknown flag ${unknown}\n  maw soul help` };
+  if (off && verb !== "icon") return { error: "--off goes with icon, not " + verb };
+  if (verb === "icon") {
+    if (all || denyMain || chname || pin || linkOpts.length) return { error: "icon takes only [repo] [--off] [--yes]" };
+    if (!pos[0]) return { error: "which oracle?\n  maw soul icon <oracle> [repo] [--off] [--yes]" };
+    if (pos.length > 2) return { error: `too many words: ${pos.slice(2).join(" ")}` };
+    const d = !yes || dryAsked;
+    return { argv: ["icon", oracleName(pos[0]), ...pos.slice(1), ...(off ? ["--off"] : []), ...(d ? [] : ["--go"])], dry: d };
+  }
   if (all && verb !== "ears") return { error: "--all goes with ears add, not " + verb };
   if ((owner || fresh) && verb !== "promote") return { error: "--owner and --new go with promote, not " + verb };
   if ((unarch || by) && verb !== "archive") return { error: "--unarchive and --by go with archive, not " + verb };
@@ -229,8 +243,8 @@ export async function handler(ctx: InvokeContext): Promise<PluginResult> {
   const r = spawnSync("zsh", [bin, ...p.argv], { stdio: "inherit" });
   if (r.error) return { ok: false, error: `cannot run zsh: ${r.error.message}` };
   const verb = p.argv[0];
-  const tail = p.dry && (WRITES.has(args.find(a => !a.startsWith("--")) ?? "") || p.argv[0] === "ears")
-    ? `\nplan only. To run it (Nat's go, from a terminal):\n  maw soul ${args.filter(a => a !== "--dry").join(" ")} --yes`
+  const tail = p.dry && (WRITES.has(args.find(a => !a.startsWith("--")) ?? "") || p.argv[0] === "ears" || p.argv[0] === "icon")
+    ? `\nplan only. To run it (on Nat's or catbutter's go):\n  maw soul ${args.filter(a => a !== "--dry").join(" ")} --yes`
     : "";
   return r.status === 0 ? { ok: true, output: tail.trim() || undefined } : { ok: false, error: `herdr-soul ${verb} exited ${r.status}` };
 }

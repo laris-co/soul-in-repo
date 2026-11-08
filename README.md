@@ -53,6 +53,8 @@ maw soul in <oracle> [repo] [--deny-main] [--chname=dash] [--yes]
 maw soul migrate <oracle> [repo] [--deny-main] [--chname=dash] [--yes]
 maw soul out <oracle> [repo] [--yes]
 maw soul ears <oracle> [repo] [add|rm <thread>] [--all] [--yes]
+maw soul threads [repo]                     # which soul hears which thread (Discord GETs only)
+maw soul icon <oracle> [repo] [--off] [--yes] # own thread renamed '<icon>・<oracle>' by the soul's own bot
 ```
 
 A thin maw plugin in `maw-plugin/`: every verb runs `bin/herdr-soul`, nothing is copied. The herdr plugin `laris.soul`
