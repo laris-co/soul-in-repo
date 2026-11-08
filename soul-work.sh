@@ -48,7 +48,11 @@ have=$(python3 -c 'import json,sys
 try: g=json.load(open(sys.argv[1])).get("groups",{})
 except Exception: g={}
 r=g.get(sys.argv[2]); print("NOROW" if r is None else ("ARCHIVED" if r.get("archived") else " ".join(r.get("souls",[]))))' $L ${CH:-none})
-[[ $have = ARCHIVED ]] && { echo "stop: room $CH is archived: /archive there brings it back first"; exit 1; }
+UNARCH=0
+if [[ $have = ARCHIVED ]]; then   # Nat 2026-11-08 "work should auto unarchive?": yes, /work brings an archived room back
+  UNARCH=1; echo "  ♻️  room $CH is archived: /work unarchives it first (back on top of ⚡ active, its souls back online)"
+  have=$(python3 -c 'import json,sys;print(" ".join(json.load(open(sys.argv[1]))["groups"][sys.argv[2]].get("archived_souls",[])))' $L $CH)
+fi
 [[ $have = NOROW ]] && insouls=() || insouls=(${=have})
 todo=(${ORACLES:|insouls})
 if [[ -n $CH ]]; then echo "  2. room: ♻️ <#$CH> exists -> reuse${${have:#NOROW}:+ (souls: ${(j:, :)insouls:-none})}"
@@ -81,6 +85,7 @@ report $R | sed 's/^/     | /'
 (( YES )) || { echo "plan only. To run (Nat's or catbutter's go): maw soul work $REPO${ORACLES:+ ${(j: :)ORACLES}} --yes"; exit 0; }
 
 # ════ RUN ════
+(( UNARCH )) && zsh $HERE/soul-archive.sh $REPO --unarchive --by=work --yes | grep -E '✓|✗|done:|stop' | sed 's/^/  unarchive: /' || true
 [[ -d $R/.git ]] || { ghq get -p $REPO >/dev/null 2>&1 || ghq get $REPO >/dev/null 2>&1 || true; }
 [[ -d $R/.git ]] || { echo "stop: could not clone $REPO"; exit 1; }
 git -C $R fetch -q origin 2>/dev/null || true
