@@ -1,5 +1,5 @@
 #!/usr/bin/env zsh
-# herdr-soul — one tool, nine verbs: put an oracle's soul to work inside another repo.
+# herdr-soul — one tool, many verbs: put an oracle's soul to work inside another repo.
 #   herdr-soul list                      oracles that can come in (soul, Discord token, Claude token, machine, where they already are)
 #   herdr-soul ls    [repo]              souls living in a repo: worktree, thread, pane, gateway ready?
 #   herdr-soul check <oracle> [repo]     preflight only, changes nothing; prints the fix for every failed item
@@ -20,6 +20,9 @@
 #                                        per soul (its own bot), body = scratch dir (<soul>/ψ/lab/<idea>). Plan; --yes runs.
 #   herdr-soul convert <idea> --repo=<owner/repo> [--public] [--yes]   idea -> repo: create/get the repo, rename the
 #                                        channel 📦・<owner>∕<repo>, rebuild each soul in <repo>/wt on the SAME thread.
+#   herdr-soul promote <thread> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]   a talk thread ->
+#                                        a repo (name from the thread, origin/thread.md saved) + its room 📦・<owner>∕<repo>
+#                                        with the souls given; '📦 moved to' in the thread, then it is archived. soul-promote.sh
 #   herdr-soul wt    <name> [repo] [--channel=<id>] [--bot=<oracle>] [--yes]   a named worktree <repo>/wt/<name> (branch
 #                                        wt/<name>, reused if there) joined by forward like link; default bot laris-labs-oracle,
 #                                        default channel the repo's layout-9 channel. Last line: RESULT thread= pane= wt=
@@ -44,7 +47,7 @@ GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 EARS_BIN=${HERDR_SOUL_EARS:-$HERE/soul-ears}
 DRY=0; GO=0; YES=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; BOTSET=0; NAME=""; BPANE=""; WHOLE=""; THPIN=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle; BOTSET=1;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --thread=*) THPIN=${a#*=};; --dir=*|--repo=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle; BOTSET=1;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --thread=*) THPIN=${a#*=};; --dir=*|--repo=*|--owner=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -274,6 +277,12 @@ idea|convert)
   # Nat 2026-11-07 22:03 "yes go!" (via Laris): idea mode before a repo exists, then convert. Logic in soul-idea.sh.
   (( YES && !DRY )) && y=(--yes) || y=()
   exec zsh $HERE/../soul-idea.sh $VERB ${ARGS[2,-1]} $PASS $y
+  ;;
+
+promote)
+  # Nat 2026-11-08 "build and merge all please asap" (via Laris, after promote-demo was done by hand): thread -> repo.
+  (( YES && !DRY )) && y=(--yes) || y=()
+  exec zsh $HERE/../soul-promote.sh ${ARGS[2,-1]} $PASS ${NAME:+--name=$NAME} $y
   ;;
 
 wt|wt-close)
@@ -583,5 +592,5 @@ ears)
   fi
   ;;
 
-*) sed -n '2,23p' $0; exit 2;;
+*) sed -n '2,36p' $0; exit 2;;
 esac
