@@ -1,0 +1,22 @@
+#!/usr/bin/env zsh
+# repo-space <repo path> <worktree path> <label> — open an agent space for a worktree NESTED UNDER its repo in herdr,
+# and print the new pane id. Used by soul-in-repo.sh (souls) and herdr-soul link/wt (worktrees), so both land in the
+# same tree (Nat 2026-11-08, issue #25: /wt panes used to split the bot body's pane and showed up under laris-team).
+# When the repo has no herdr space yet, an ANCHOR space is created at its main checkout, labelled '<repo> (anchor)',
+# and its shell says it holds no agent (it is only there so the worktree spaces nest under the repo).
+set -euo pipefail
+R=${1:?repo path}; W=${2:?worktree path}; LABEL=${3:?label}
+S=${HERDR_SESSION:-laris-co}
+wsof() { herdr --session $S worktree list --cwd "$R" | python3 -c 'import sys,json
+try: print(json.load(sys.stdin)["result"]["source"].get("source_workspace_id") or "")
+except Exception: print("")'; }
+MWS=$(wsof)
+if [[ -z $MWS ]]; then
+  AP=$(herdr --session $S workspace create --cwd "$R" --label "${R:t} (anchor)" --no-focus \
+    | python3 -c 'import sys,re; m=re.search(r"\"pane_id\": ?\"([^\"]+)\"", sys.stdin.read()); print(m.group(1) if m else "")')
+  [[ -n $AP ]] && herdr --session $S pane run $AP "clear; echo 'anchor for ${R:t}: souls and worktrees nest under this space; no agent runs here'" >/dev/null || true
+  MWS=$(wsof)
+fi
+[[ -n $MWS ]] || { echo "no herdr space for $R" >&2; exit 1; }
+herdr --session $S worktree open --workspace "$MWS" --path "$W" --label "$LABEL" --no-focus \
+  | python3 -c 'import sys,re; print(re.search(r"\"pane_id\": ?\"([^\"]+)\"", sys.stdin.read()).group(1))'
