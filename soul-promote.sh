@@ -4,6 +4,8 @@
 # nat-build-with-oracle/promote-demo).
 #
 #   soul-promote.sh <thread-id> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]
+#   Existing repo first: without --name (or --new), a repo on this machine whose name is close to the thread's stops
+#   the plan (exit 3, 'MATCH <owner/repo> (<score>)' lines): confirm with --owner= --name=, or --new for a new repo.
 #
 # 1 name  from the thread name: an icon prefix '🧬・' and a leading '!!' are dropped, then lowercase-dash
 #         ('ESP32 beacon' -> esp32-beacon). --name=<repo> sets it.
@@ -31,9 +33,9 @@ PREFIX=${SOUL_CHPREFIX-📦・}                          # icon prefix for a NEW
 OWNER=${SOUL_PROMOTE_OWNER:-nat-build-with-oracle}
 SAY=$TEAM/tools/discord-say.sh
 ghq=$(ghq root)
-TH=""; NAME=""; PRIV=1; VISSET=0; YES=0; DRY=0; ORACLES=()
+TH=""; NAME=""; PRIV=1; VISSET=0; YES=0; DRY=0; ORACLES=(); FRESH=0; OWNSET=0
 for a in "$@"; do case $a in
-  --yes) YES=1;; --dry) DRY=1;; --owner=*) OWNER=${a#*=};; --name=*) NAME=${a#*=};;
+  --yes) YES=1;; --dry) DRY=1;; --owner=*) OWNER=${a#*=}; OWNSET=1;; --name=*) NAME=${a#*=};; --new) FRESH=1;;
   --private) PRIV=1; VISSET=1;; --public) PRIV=0; VISSET=1;;
   -h|--help) sed -n 2,23p $0; exit 0;;
   --*) echo "unknown $a"; echo "  soul-promote.sh <thread-id> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]"; exit 2;;
@@ -80,9 +82,34 @@ PY
 base=${TNAME#*・}
 SLUG=${NAME:-$(python3 -c 'import re,sys,unicodedata
 s=unicodedata.normalize("NFKD",sys.argv[1]).encode("ascii","ignore").decode().lower().lstrip("!")
+s=re.sub("[\\x27\\u2019`]","",s)   # apostrophes: god-apostrophe-s -> gods, not god-s (Nat 2026-11-08)
 s=re.sub(r"[^a-z0-9._-]+","-",s); s=re.sub(r"-+","-",s).strip("-._")
 print(s[:100])' "$base")}
 [[ -n $SLUG && $SLUG != (.|..) ]] || { echo "stop: the thread name '$TNAME' gives no repo name (a-z 0-9 . _ -): pass --name=<repo>"; exit 1; }
+# existing repo first (Nat 2026-11-08 "fix promote to use existing repo first", "let confirm ?"): without --name or --new,
+# look for a repo on this machine (ghq) whose name is close to the slug ('oracle' dropped: gods-eyes-os ~ oracle-gods-eys-os).
+# A match is never used or skipped silently: the plan stops and asks (MATCH lines; the /promote slash shows buttons).
+if [[ -z $NAME ]] && (( ! FRESH )); then
+  matches=$(ghq list 2>/dev/null | python3 -c '
+import sys,re,difflib
+slug=sys.argv[1]
+k=lambda n: re.sub(r"[^a-z0-9]","",re.sub(r"(^|[-_.])oracle([-_.]|$)","-",n.lower()))
+want=k(slug); out=[]
+for l in sys.stdin:
+    p=l.strip().split("/")
+    if len(p)!=3 or p[0]!="github.com" or p[1].startswith("_"): continue
+    r=difflib.SequenceMatcher(None,want,k(p[2])).ratio()
+    if len(want)>=4 and (r>=0.8 or (len(k(p[2]))>=4 and (want in k(p[2]) or k(p[2]) in want))): out.append((r,p[1]+"/"+p[2]))
+for r,n in sorted(out,reverse=True)[:5]: print("%.2f %s" % (r,n))' "$SLUG")
+  if [[ -n $matches ]]; then
+    echo "promote: thread $TH '$TNAME' ($TCOUNT messages, in #$PNAME)"
+    echo "  ♻️  existing repo(s) close to '$SLUG' on this machine: pick one, or say it is new"
+    print -r -- $matches | while read -r sc rp; do echo "MATCH $rp ($sc)"; done
+    echo "  ⚠️  or a NEW repo: $OWNER/$SLUG (add --new)"
+    echo "confirm: maw soul promote $TH${ORACLES:+ ${(j: :)ORACLES}} --owner=<owner> --name=<repo>   or   ... --new"
+    exit 3
+  fi
+fi
 REPO=$OWNER/$SLUG; R=$ghq/github.com/$REPO
 CHN=${(L)REPO/\//∕}
 echo "promote: thread $TH '$TNAME' ($TCOUNT messages, $TSTATE, in #$PNAME) -> repo $REPO · souls: ${(j:, :)ORACLES:-none (room only)} · $how"
@@ -100,7 +127,7 @@ COMMIT=1; why=""
 if [[ -d $R/.git ]]; then
   if git -C $R rev-parse -q --verify HEAD >/dev/null 2>&1; then
     def=$(git -C $R symbolic-ref -q --short refs/remotes/origin/HEAD 2>/dev/null || true); def=${def#origin/}; def=${def:-main}
-    br=$(git -C $R branch --show-current); dirty=$(git -C $R status --porcelain | wc -l | tr -d ' ')
+    br=$(git -C $R branch --show-current); dirty=$(git -C $R status --porcelain --untracked-files=no | wc -l | tr -d ' ')   # untracked files are never added
     (( dirty )) && { COMMIT=0; why="$dirty uncommitted change(s)"; }
     [[ $br = $def ]] || { COMMIT=0; why="${why:+$why, }on branch '$br', not '$def'"; }
   fi

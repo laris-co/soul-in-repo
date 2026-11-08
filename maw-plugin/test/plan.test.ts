@@ -151,5 +151,11 @@ test("promote: a thread id, then oracles; plan unless --yes", () => {
   expect("error" in plan(["promote", T, "--repo=a/b"])).toBe(true);
   expect("error" in plan(["promote", T, "--name=bad name"])).toBe(true);
   expect("error" in plan(["promote", T, "--owner=-x"])).toBe(true);
-  expect((plan(["in", "neo", "--owner=laris-co"]) as { error: string }).error).toContain("--owner goes with promote");
+  expect((plan(["in", "neo", "--owner=laris-co"]) as { error: string }).error).toContain("go with promote");
+});
+
+test("promote --new passes through; --owner/--new only with promote", () => {
+  const T = "1566303691781308466";
+  expect(plan(["promote", T, "neo", "--new", "--yes"])).toEqual({ argv: ["promote", T, "neo-oracle", "--new", "--yes"], dry: false });
+  expect("error" in plan(["in", "neo", "--new"])).toBe(true);
 });

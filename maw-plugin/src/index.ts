@@ -50,6 +50,9 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
                                         origin/thread.md + messages.jsonl committed (secret scan first), channel
                                         📦・<owner>∕<name> + Laris row, each <oracle> in with its own thread, then
                                         '📦 moved to' in the thread and it is archived. Last line: RESULT repo= room=
+                                        Existing repo first: without --name, a repo on this machine with a close
+                                        name stops the plan (exit 3, MATCH lines): confirm with --owner= --name=,
+                                        or --new for a new repo
   maw soul wt        <name> [repo]      plan; worktree <repo>/wt/<name> (branch wt/<name>, reused if there), then link:
                                         thread <name> in the repo's layout-9 channel (--channel=<id>), forward row,
                                         claude beside the bot body. --bot=<oracle> (default laris-labs-oracle).
@@ -90,17 +93,18 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const pin = args.find(a => a.startsWith("--channel="));
   const all = args.includes("--all");
   const owner = args.find(a => a.startsWith("--owner="));
+  const fresh = args.includes("--new");
   if (pin && !/^--channel=\d{15,22}$/.test(pin)) return { error: `${pin}: use --channel=<channel id>` };
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
   const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel|thread)=/.test(a));
   const ideaOpts = args.filter(a => /^--(dir|repo)=/.test(a) || a === "--public" || a === "--private");
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner);
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new");
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
   if (unknown) return { error: `unknown flag ${unknown}\n  maw soul help` };
   if (all && verb !== "ears") return { error: "--all goes with ears add, not " + verb };
-  if (owner && verb !== "promote") return { error: "--owner goes with promote, not " + verb };
+  if ((owner || fresh) && verb !== "promote") return { error: "--owner and --new go with promote, not " + verb };
   if (verb === "promote") {
     const th = pos[0];
     if (!th || !/^\d{15,22}$/.test(th)) return { error: "which thread?\n  maw soul promote <thread id> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]" };
@@ -110,7 +114,7 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
     if (nm && !/^--name=[A-Za-z0-9._-]{1,100}$/.test(nm)) return { error: `${nm}: a repo name is letters, digits, '.', '_' and '-'` };
     if (owner && !/^--owner=[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner)) return { error: `${owner}: use --owner=<github owner>` };
     const d = !yes || dryAsked;
-    return { argv: ["promote", th, ...pos.slice(1).map(oracleName), ...(owner ? [owner] : []), ...(nm ? [nm] : []), ...ideaOpts, ...(d ? ["--dry"] : ["--yes"])], dry: d };
+    return { argv: ["promote", th, ...pos.slice(1).map(oracleName), ...(owner ? [owner] : []), ...(nm ? [nm] : []), ...ideaOpts, ...(fresh ? ["--new"] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
   }
   if (verb === "ears") return earsPlan(pos, yes && !dryAsked, all, !!(denyMain || chname || pin || linkOpts.length));
   if (READS.has(verb)) {
