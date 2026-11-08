@@ -12,7 +12,8 @@
 # 3 save  maw atlas download <thread> -> origin/thread.md (readable) + origin/messages.jsonl (raw) + origin/attachments/,
 #         secret scan BEFORE anything is created, then commit + push. An existing checkout that is dirty or off its
 #         default branch is left alone: the files stay in a temp folder and the path is printed.
-# 4 room  channel '📦・<owner>∕<name>' found by name (as soul-in-repo.sh does) or created under 📦 repos; a Laris row
+# 4 room  channel '📦・<owner>∕<name>' found by name (as soul-in-repo.sh does) or created under ⚡ active (where Nat
+#         keeps the live repo rooms; Nat 2026-11-08: "i can not see that promote" when it sat in 📦 repos); a Laris row
 #         (layout 9, souls []) when it has none. Each <oracle> given comes in with herdr-soul room <repo> <oracle>...
 #         --channel=<id> --yes (its own thread and worktree); a soul already in the room is skipped. No oracle = room
 #         only: /soul or maw soul room adds souls later.
@@ -25,7 +26,7 @@ HERE=${0:A:h}
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
 L=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}
 GUILD=1560847800881643520; NAT=691531480689541170; CB=917019242094817301
-REPOCAT=${SOUL_REPO_CATEGORY:-1568651567144374314}   # 📦 repos
+ROOMCAT=${SOUL_PROMOTE_CATEGORY:-1568658399149821952}  # ⚡ active (📦 repos 1568651567144374314 holds parked rooms)
 PREFIX=${SOUL_CHPREFIX-📦・}                          # icon prefix for a NEW channel (same as soul-in-repo.sh)
 OWNER=${SOUL_PROMOTE_OWNER:-nat-build-with-oracle}
 SAY=$TEAM/tools/discord-say.sh
@@ -133,7 +134,7 @@ print("NOROW" if r is None else " ".join(r.get("souls",[])))' $L ${CH:-none})
 [[ $have = NOROW ]] && insouls=() || insouls=(${=have})
 todo=(${ORACLES:|insouls}); skip=(${ORACLES:*insouls})
 if [[ -n $CH ]]; then echo "  4. room: channel $CH ('$CHN') exists -> reuse${${have:#NOROW}:+; Laris row there (souls: ${(j:, :)insouls:-none})}"
-else echo "  4. room: create channel '$PREFIX$CHN' under 📦 repos ($REPOCAT) with the Laris token"; fi
+else echo "  4. room: create channel '$PREFIX$CHN' under ⚡ active ($ROOMCAT) with the Laris token"; fi
 [[ $have = NOROW ]] && echo "     Laris row: groups[${CH:-<new channel>}] = {layout 9, repo $REPO, souls [], requireMention false} (backup first)"
 fail=0
 for o in $todo; do
@@ -234,7 +235,7 @@ fi
 NEWROOM=0
 if [[ -z $CH ]]; then
   CH=$(api -X POST https://discord.com/api/v10/guilds/$GUILD/channels \
-    -d "$(python3 -c 'import json,sys;print(json.dumps({"name":sys.argv[1],"type":0,"parent_id":sys.argv[2],"topic":"repo "+sys.argv[3]+": promoted from the thread "+sys.argv[4]+"; one thread per oracle soul"}))' "$PREFIX$CHN" $REPOCAT $REPO "$TNAME")" \
+    -d "$(python3 -c 'import json,sys;print(json.dumps({"name":sys.argv[1],"type":0,"parent_id":sys.argv[2],"topic":"repo "+sys.argv[3]+": promoted from the thread "+sys.argv[4]+"; one thread per oracle soul"}))' "$PREFIX$CHN" $ROOMCAT $REPO "$TNAME")" \
     | python3 -c 'import json,sys;print(json.load(sys.stdin).get("id",""))')
   [[ -n $CH ]] || { echo "stop: could not create channel '$PREFIX$CHN' (repo $REPO is done; rerun to retry the room)"; exit 1; }
   NEWROOM=1; echo "  ✓ channel '$PREFIX$CHN' created: $CH"
