@@ -20,6 +20,7 @@
 #                                        per soul (its own bot), body = scratch dir (<soul>/ψ/lab/<idea>). Plan; --yes runs.
 #   herdr-soul convert <idea> --repo=<owner/repo> [--public] [--yes]   idea -> repo: create/get the repo, rename the
 #                                        channel 📦・<owner>∕<repo>, rebuild each soul in <repo>/wt on the SAME thread.
+#   herdr-soul work <owner/repo|url> [<oracle>...] [--yes]   find/clone the repo, its room (reuse or ⚡ active), a report, souls
 #   herdr-soul archive <repo> [--unarchive] [--by=<name>] [--yes]   souls out, threads archived, room to 🗄️ Archive. soul-archive.sh
 #   herdr-soul promote <thread> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]   a talk thread ->
 #                                        a repo (name from the thread, origin/thread.md saved) + its room 📦・<owner>∕<repo>
@@ -282,6 +283,12 @@ idea|convert)
   # Nat 2026-11-07 22:03 "yes go!" (via Laris): idea mode before a repo exists, then convert. Logic in soul-idea.sh.
   (( YES && !DRY )) && y=(--yes) || y=()
   exec zsh $HERE/../soul-idea.sh $VERB ${ARGS[2,-1]} $PASS $y
+  ;;
+
+work)
+  # Nat 2026-11-08 "/work for report like /work <github url>": repo + room + report + souls. soul-work.sh
+  (( YES && !DRY )) && y=(--yes) || y=()
+  exec zsh $HERE/../soul-work.sh ${ARGS[2,-1]} $y
   ;;
 
 archive)

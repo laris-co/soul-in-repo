@@ -179,3 +179,9 @@ test("archive: one repo, plan unless --yes, --unarchive and --by pass through", 
   expect("error" in plan(["archive"])).toBe(true);
   expect("error" in plan(["in", "neo", "--unarchive"])).toBe(true);
 });
+
+test("work: a repo or a github url, then oracles", () => {
+  expect(plan(["work", "https://github.com/Soul-Brews-Studio/discord-voice-bot"])).toEqual({ argv: ["work", "Soul-Brews-Studio/discord-voice-bot", "--dry"], dry: true });
+  expect(plan(["work", "a/b", "neo", "--yes"])).toEqual({ argv: ["work", "a/b", "neo-oracle", "--yes"], dry: false });
+  expect("error" in plan(["work"])).toBe(true);
+});

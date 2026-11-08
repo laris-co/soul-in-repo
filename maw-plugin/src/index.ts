@@ -55,6 +55,9 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
                                         Existing repo first: without --name, a repo on this machine with a close
                                         name stops the plan (exit 3, MATCH lines): confirm with --owner= --name=,
                                         or --new for a new repo
+  maw soul work      <owner/repo|url> [<oracle>...]   plan; the repo (cloned if missing), its room (reused, else made
+                                        in ⚡ active), a report posted there (README, commits, PRs/issues, checkouts),
+                                        souls brought in. Last line: RESULT repo= room= souls=
   maw soul archive   <owner/repo>      plan; put a finished repo room away: souls out (panes closed, threads archived),
                                         /wt threads unlinked, other threads archived, room to 🗄️ Archive, Laris row
                                         archived. Worktrees and the repo stay. --unarchive brings the room back
@@ -87,7 +90,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   --yes   run it. These write access rows: only on Nat's go from a terminal.
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
-const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close", "promote", "archive"]);
+const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close", "promote", "archive", "work"]);
 const READS = new Set(["list", "ls", "check", "threads"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
@@ -125,6 +128,12 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   if (all && verb !== "ears") return { error: "--all goes with ears add, not " + verb };
   if ((owner || fresh) && verb !== "promote") return { error: "--owner and --new go with promote, not " + verb };
   if ((unarch || by) && verb !== "archive") return { error: "--unarchive and --by go with archive, not " + verb };
+  if (verb === "work") {
+    const r = (pos[0] ?? "").replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "").split("/").slice(0, 2).join("/");
+    if (!/^[\w.-]+\/[\w.-]+$/.test(r)) return { error: "which repo?\n  maw soul work <owner/repo | github url> [<oracle>...] [--yes]" };
+    const d = !yes || dryAsked;
+    return { argv: ["work", r, ...pos.slice(1).map(oracleName), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+  }
   if (verb === "archive") {
     if (pos.length !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(pos[0]!)) return { error: "which repo?\n  maw soul archive <owner/repo> [--unarchive] [--yes]" };
     if (by && !/^--by=[\w.-]{1,40}$/.test(by)) return { error: `${by}: --by=<name>` };
