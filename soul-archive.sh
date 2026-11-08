@@ -71,6 +71,7 @@ PY2
 import json,sys
 f,ch=sys.argv[1:]; a=json.load(open(f)); r=a["groups"][ch]
 r["archived"]=False; r["requireMention"]=False
+import time; r["unarchived_at"]=time.strftime("%Y-%m-%dT%H:%M:%S%z")   # for /recent
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)
 PY
   echo "  ✓ Laris row live"
@@ -128,7 +129,8 @@ import json,sys
 f,ch=sys.argv[1:]; a=json.load(open(f)); r=a["groups"][ch]
 r["archived_souls"]=sorted(set(r.get("archived_souls",[]))|set(r.get("souls",[])))
 r["archived_threads"]={**r.get("archived_threads",{}),**r.get("threads",{})}
-r.update(archived=True, souls=[], threads={}, requireMention=True)
+import time
+r.update(archived=True, souls=[], threads={}, requireMention=True, archived_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"))   # for /recent
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)
 PY
 echo "  ✓ Laris row archived (backup beside $L)"
