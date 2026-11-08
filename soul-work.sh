@@ -10,6 +10,7 @@
 # 3 report  posted in the room: what it is (README), last commits, open PRs + issues, checkouts on this machine
 #           (room-status: worktrees, agents, 🧹 stale)
 # 4 souls   each <oracle> not in the room yet: herdr-soul room <repo> <oracle> --channel=<id> --yes
+# --post=<id>: post the report in that channel or thread instead of the room (/work typed inside a room).
 # Plan by default: the report is printed, nothing is created or posted. --yes runs (Nat's or catbutter's go).
 # Last line of a run: RESULT repo=<o/r> room=<id> souls=<a,b|->
 set -euo pipefail
@@ -21,8 +22,8 @@ ROOMCAT=${SOUL_PROMOTE_CATEGORY:-1568658399149821952}   # ⚡ active
 PREFIX=${SOUL_CHPREFIX-📦・}
 SAY=$TEAM/tools/discord-say.sh
 ghq=$(ghq root)
-REPO=""; YES=0; DRY=0; ORACLES=()
-for a in "$@"; do case $a in --yes) YES=1;; --dry) DRY=1;; --*) echo "unknown $a"; exit 2;;
+REPO=""; YES=0; DRY=0; ORACLES=(); POST=""
+for a in "$@"; do case $a in --yes) YES=1;; --dry) DRY=1;; --post=*) POST=${a#*=};; --*) echo "unknown $a"; exit 2;;
   *) if [[ -z $REPO ]]; then REPO=$a; else ORACLES+=${a%-oracle}-oracle; fi;; esac; done
 (( DRY )) && YES=0
 REPO=${REPO#https://github.com/}; REPO=${REPO#http://github.com/}; REPO=${REPO#github.com/}; REPO=${REPO%.git}; REPO=${REPO%/}
@@ -102,7 +103,8 @@ json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)
 PY
   echo "  ✓ Laris row: channel $CH, repo $REPO"
 fi
-BOT=laris-labs-oracle $SAY $CH "$(report $R | head -c 1900)" >/dev/null && echo "  ✓ report posted in <#$CH>"
+# --post=<channel or thread id> (Nat 2026-11-08 "/work . in the thread"): the report goes where /work was typed
+BOT=laris-labs-oracle $SAY ${POST:-$CH} "$(report $R | head -c 1900)" >/dev/null && echo "  ✓ report posted in <#${POST:-$CH}>"
 okso=()
 if (( ${#todo} )); then
   zsh $HERE/bin/herdr-soul room $REPO $todo --channel=$CH --yes | grep -E 'done:|✗|stop|deny-main: main body on' || true

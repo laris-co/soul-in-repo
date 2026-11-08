@@ -112,7 +112,7 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
   const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel|thread)=/.test(a));
   const ideaOpts = args.filter(a => /^--(dir|repo)=/.test(a) || a === "--public" || a === "--private");
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== "--off" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new" && a !== "--unarchive" && a !== by);
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== "--off" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new" && a !== "--unarchive" && a !== by && !/^--post=\d{15,22}$/.test(a));
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
@@ -132,7 +132,8 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
     const r = (pos[0] ?? "").replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "").replace(/\/$/, "").split("/").slice(0, 2).join("/");
     if (!/^[\w.-]+\/[\w.-]+$/.test(r)) return { error: "which repo?\n  maw soul work <owner/repo | github url> [<oracle>...] [--yes]" };
     const d = !yes || dryAsked;
-    return { argv: ["work", r, ...pos.slice(1).map(oracleName), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+    const post = args.find(a => /^--post=\d{15,22}$/.test(a));
+    return { argv: ["work", r, ...pos.slice(1).map(oracleName), ...(post ? [post] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
   }
   if (verb === "archive") {
     if (pos.length !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(pos[0]!)) return { error: "which repo?\n  maw soul archive <owner/repo> [--unarchive] [--yes]" };
