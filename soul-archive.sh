@@ -47,9 +47,25 @@ if (( UN )); then
   [[ $STATE = archived ]] || { echo "stop: room $CH of $REPO is not archived"; exit 1; }
   echo "unarchive: $REPO · room $CH · $how"
   echo "  1. channel back to ⚡ active ($ACTIVE), line 'unarchived by $BY'"
-  echo "  2. Laris row live again (archived off, requireMention false); souls come back with /soul"
+  back=$(python3 -c 'import json,sys;print(" ".join(json.load(open(sys.argv[1]))["groups"][sys.argv[2]].get("archived_souls",[])))' $L $CH)
+  echo "  2. Laris row live again (archived off, requireMention false)"
+  echo "  3. souls back online: ${back:-none} (each: its worktree reused, own thread, own bot, same conversation)"
   (( YES )) || { echo "plan only. To run (Nat's or catbutter's go): maw soul archive $REPO --unarchive --yes"; exit 0; }
-  api -o /dev/null -w "  ✓ channel to ⚡ active (HTTP %{http_code})\n" -X PATCH https://discord.com/api/v10/channels/$CH -d "{\"parent_id\":\"$ACTIVE\"}"
+  # back to ⚡ active AND on top of it, right under 📋 board (Nat 2026-11-08: "not same like unarchive ... on top in active";
+  # a parent_id PATCH alone appends the channel at the bottom of the category)
+  python3 - "$LT" $GUILD $CH $ACTIVE <<'PY2'
+import json,sys,urllib.request
+tok,g,ch,cat=sys.argv[1:]
+H={"Authorization":"Bot "+tok,"Content-Type":"application/json","User-Agent":"soul-archive (laris-co/soul-in-repo, 1)"}
+def req(u,m="GET",b=None):
+    return urllib.request.urlopen(urllib.request.Request("https://discord.com/api/v10"+u,method=m,data=json.dumps(b).encode() if b is not None else None,headers=H),timeout=20)
+chs=json.load(req(f"/guilds/{g}/channels"))
+kids=sorted([c for c in chs if c.get("parent_id")==cat and c["id"]!=ch and c["type"] in (0,5,15)],key=lambda c:c["position"])
+board=[c for c in kids if "board" in c["name"]]; rest=[c for c in kids if c not in board]
+order=board+[{"id":ch}]+rest
+body=[{"id":c["id"],"position":i,**({"parent_id":cat,"lock_permissions":False} if c["id"]==ch else {})} for i,c in enumerate(order)]
+print("  ✓ channel to ⚡ active, on top (HTTP %d)" % req(f"/guilds/{g}/channels","PATCH",body).status)
+PY2
   cp -p $L $L.bak-$(date +%Y%m%d-%H%M%S)-unarchive
   python3 - $L $CH <<'PY'
 import json,sys
@@ -58,7 +74,13 @@ r["archived"]=False; r["requireMention"]=False
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)
 PY
   echo "  ✓ Laris row live"
-  BOT=laris-labs-oracle $SAY $CH "📦 **unarchived** by $BY · souls come back with \`/soul\`" >/dev/null && echo "  ✓ line in the room"
+  BOT=laris-labs-oracle $SAY $CH "📦 **unarchived** by $BY · souls coming back: ${back:-none}" >/dev/null && echo "  ✓ line in the room"
+  for o in ${=back}; do
+    if zsh $HERE/bin/herdr-soul in $o $REPO --channel=$CH --deny-main 2>&1 | grep -E 'done:|✗|stop' | sed "s/^/  $o: /"; then :; fi
+  done
+  python3 -c 'import json,sys
+f,ch=sys.argv[1:]; a=json.load(open(f)); r=a["groups"][ch]; r["archived_souls"]=[o for o in r.get("archived_souls",[]) if o not in r.get("souls",[])]
+json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $L $CH
   echo "RESULT room=$CH state=active"; exit 0
 fi
 
