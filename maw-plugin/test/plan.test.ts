@@ -109,3 +109,73 @@ test("threads reads; icon is a plan unless --yes", () => {
   expect(err(["icon", "neo", "--all"])).toContain("icon takes only");
   expect(err(["ls", "--off"])).toContain("--off goes with icon");
 });
+
+test("idea: channel per idea, oracles named, plan unless --yes", () => {
+  expect(plan(["idea", "fake-idea", "neo", "pulse"])).toEqual({ argv: ["idea", "fake-idea", "neo-oracle", "pulse-oracle", "--dry"], dry: true });
+  expect(plan(["idea", "fake-idea", "neo", "--dir=/tmp/x", "--channel=1568636860144816248", "--yes"])).toEqual({ argv: ["idea", "fake-idea", "neo-oracle", "--dir=/tmp/x", "--channel=1568636860144816248", "--yes"], dry: false });
+  expect("error" in plan(["idea", "Fake_Idea", "neo"])).toBe(true);
+  expect("error" in plan(["idea", "fake-idea"])).toBe(true);
+  expect("error" in plan(["idea", "fake-idea", "neo", "--repo=a/b"])).toBe(true);
+  expect("error" in plan(["in", "neo", "--dir=/tmp"])).toBe(true);
+});
+
+test("convert: --repo required, souls come from the Laris row", () => {
+  expect(plan(["convert", "fake-idea", "--repo=laris-co/fake-idea-test"])).toEqual({ argv: ["convert", "fake-idea", "--repo=laris-co/fake-idea-test", "--dry"], dry: true });
+  expect(plan(["convert", "fake-idea", "--repo=laris-co/x", "--public", "--yes"])).toEqual({ argv: ["convert", "fake-idea", "--repo=laris-co/x", "--public", "--yes"], dry: false });
+  expect("error" in plan(["convert", "fake-idea"])).toBe(true);
+  expect("error" in plan(["convert", "fake-idea", "--repo=nope"])).toBe(true);
+  expect("error" in plan(["convert", "fake-idea", "neo", "--repo=a/b"])).toBe(true);
+});
+
+test("wt / wt-close: named worktree joined by forward, plan unless --yes", () => {
+  expect(plan(["wt", "test-wt", "laris-co/00_mz_forwarder"])).toEqual({ argv: ["wt", "test-wt", "laris-co/00_mz_forwarder", "--dry"], dry: true });
+  expect(plan(["wt", "fix-1", "--channel=1568518331600867338", "--bot=somsri", "--yes"])).toEqual({ argv: ["wt", "fix-1", "--bot=somsri", "--channel=1568518331600867338", "--yes"], dry: false });
+  expect(plan(["wt-close", "fix-1", "laris-co/x", "--yes"])).toEqual({ argv: ["wt-close", "fix-1", "laris-co/x", "--yes"], dry: false });
+  expect("error" in plan(["wt"])).toBe(true);
+  expect("error" in plan(["wt", "bad name"])).toBe(true);
+  expect("error" in plan(["wt", "a", "b", "c"])).toBe(true);
+  expect("error" in plan(["wt", "a", "--name=x"])).toBe(true);
+  expect("error" in plan(["wt-close", "a", "--channel=1568518331600867338"])).toBe(true);
+});
+
+test("--thread on link and wt: an existing thread, ids only, not with --whole-channel or on close", () => {
+  const w = "/opt/Code/github.com/laris-co/x/wt/a";
+  expect(plan(["link", w, "--thread=1568526565242044558"])).toEqual({ argv: ["link", w, "--thread=1568526565242044558", "--dry"], dry: true });
+  expect(plan(["wt", "a", "laris-co/x", "--thread=1568526565242044558", "--yes"])).toEqual({ argv: ["wt", "a", "laris-co/x", "--thread=1568526565242044558", "--yes"], dry: false });
+  expect("error" in plan(["link", w, "--thread=abc"])).toBe(true);
+  expect("error" in plan(["wt", "a", "--thread=abc"])).toBe(true);
+  expect("error" in plan(["link", w, "--thread=1568526565242044558", "--whole-channel=1568518331600867338"])).toBe(true);
+  expect("error" in plan(["unlink", w, "--thread=1568526565242044558"])).toBe(true);
+  expect("error" in plan(["wt-close", "a", "--thread=1568526565242044558"])).toBe(true);
+});
+
+test("promote: a thread id, then oracles; plan unless --yes", () => {
+  const T = "1568876528010268692";
+  expect(plan(["promote", T])).toEqual({ argv: ["promote", T, "--dry"], dry: true });
+  expect(plan(["promote", T, "neo", "pulse-oracle"])).toEqual({ argv: ["promote", T, "neo-oracle", "pulse-oracle", "--dry"], dry: true });
+  expect(plan(["promote", T, "neo", "--name=esp32-beacon", "--owner=laris-co", "--public", "--yes"]))
+    .toEqual({ argv: ["promote", T, "neo-oracle", "--owner=laris-co", "--name=esp32-beacon", "--public", "--yes"], dry: false });
+  expect(plan(["promote", T, "--yes", "--dry"])).toEqual({ argv: ["promote", T, "--dry"], dry: true });
+  expect((plan(["promote"]) as { error: string }).error).toContain("maw soul promote <thread id>");
+  expect((plan(["promote", "esp32"]) as { error: string }).error).toContain("which thread?");
+  expect("error" in plan(["promote", T, "--channel=1568518331600867338"])).toBe(true);
+  expect("error" in plan(["promote", T, "--deny-main"])).toBe(true);
+  expect("error" in plan(["promote", T, "--bot=neo"])).toBe(true);
+  expect("error" in plan(["promote", T, "--repo=a/b"])).toBe(true);
+  expect("error" in plan(["promote", T, "--name=bad name"])).toBe(true);
+  expect("error" in plan(["promote", T, "--owner=-x"])).toBe(true);
+  expect((plan(["in", "neo", "--owner=laris-co"]) as { error: string }).error).toContain("go with promote");
+});
+
+test("promote --new passes through; --owner/--new only with promote", () => {
+  const T = "1566303691781308466";
+  expect(plan(["promote", T, "neo", "--new", "--yes"])).toEqual({ argv: ["promote", T, "neo-oracle", "--new", "--yes"], dry: false });
+  expect("error" in plan(["in", "neo", "--new"])).toBe(true);
+});
+
+test("archive: one repo, plan unless --yes, --unarchive and --by pass through", () => {
+  expect(plan(["archive", "nat-build-with-oracle/promote-demo"])).toEqual({ argv: ["archive", "nat-build-with-oracle/promote-demo", "--dry"], dry: true });
+  expect(plan(["archive", "a/b", "--unarchive", "--by=nazt_", "--yes"])).toEqual({ argv: ["archive", "a/b", "--unarchive", "--by=nazt_", "--yes"], dry: false });
+  expect("error" in plan(["archive"])).toBe(true);
+  expect("error" in plan(["in", "neo", "--unarchive"])).toBe(true);
+});

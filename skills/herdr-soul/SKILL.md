@@ -21,6 +21,11 @@ $H room  <repo> <oracle>... [--channel=<id>] [--yes]   # many souls: migrate a l
 $H link  <wt-path> [--bot=<oracle>] [--channel=<id>] [--name=<thread>] [--pane=<id>] [--yes]
                                           # a manual worktree joins an EXISTING bot body by forward (no second gateway)
 $H unlink <wt-path> [--bot=<oracle>] [--yes]   # archive that thread, drop the forward row (backup)
+$H wt     <name> [repo] [--channel=<id>] [--bot=<oracle>] [--yes]   # worktree <repo>/wt/<name> + link (default bot Laris); RESULT line; --thread=<id> joins an existing thread
+$H wt-close <name> [repo] [--bot=<oracle>] [--yes]                    # unlink + archive the thread; the worktree stays
+$H idea    <idea> <oracle>... [--channel=<id>] [--dir=<base>] [--yes]   # IDEA MODE: channel 💡・<idea>, thread per soul, scratch body
+$H convert <idea> --repo=<owner/repo> [--public] [--yes]              # idea -> repo: same channel renamed, same threads, wt bodies
+$H promote <thread> [<oracle>...] [--owner=<o>] [--name=<repo>] [--public] [--yes]   # talk thread -> repo (origin/thread.md) + room 📦・o∕r + souls; thread archived
 ```
 
 `[repo]` = `owner/name`, an absolute path, or empty for the git repo of the current directory.

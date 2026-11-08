@@ -9,6 +9,11 @@
 //   maw soul out     <oracle> [repo]       plan; --yes takes it out (herdr-soul out --go)
 //   maw soul migrate <oracle> [repo]       plan; --yes moves a LIVE body to #repo (soul-in-repo.sh --migrate)
 //   maw soul room    <repo> <oracle>...    layout 9 for many souls: migrate a live body, else in; always --deny-main
+//   maw soul idea    <idea> <oracle>...    IDEA MODE: channel 💡・<idea>, a thread per soul, body = scratch dir
+//   maw soul convert <idea> --repo=o/r     idea -> repo: same channel (renamed 📦・o∕r), same threads, wt bodies
+//   maw soul promote <thread> [<oracle>...] a talk thread -> repo (origin/thread.md) + room 📦・o∕r + souls; archive it
+//   maw soul wt      <name> [repo]         worktree <repo>/wt/<name> + link (default bot laris-labs-oracle)
+//   maw soul wt-close <name> [repo]        unlink it, archive the thread, keep the worktree
 //   maw soul link    <wt-path>             a manual worktree joins an existing bot body by forward (no second gateway)
 //   maw soul unlink  <wt-path>             archive its thread, drop the forward row (--whole-channel: + its deny rows)
 //   maw soul threads [repo]                which soul hears which thread (Discord names, GET only)
@@ -37,6 +42,28 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   maw soul migrate   <oracle> [repo]    plan; add --yes to move a live body to its own thread in <owner>∕<repo>
   maw soul room      <repo> <oracle>... plan for many souls at once (migrate a live body, else in; always --deny-main);
                                         --channel=<id> reuses an existing room; add --yes to run
+  maw soul idea      <idea> <oracle>... plan; IDEA MODE before a repo exists: channel 💡・<idea>, a thread per soul
+                                        (its own bot), body <soul>/ψ/lab/<idea> (--dir=<base>), Laris row mode idea
+  maw soul convert   <idea> --repo=<owner/repo> [--public]   plan; the idea becomes a repo (private by default):
+                                        channel renamed 📦・<owner>∕<repo>, each soul rebuilt in <repo>/wt on the SAME thread
+  maw soul promote   <thread> [<oracle>...]   plan; a talk thread becomes a repo with its own room:
+                                        name from the thread (--name=<repo>), repo <owner>/<name> (--owner=, default
+                                        nat-build-with-oracle; private unless --public; reused if it exists),
+                                        origin/thread.md + messages.jsonl committed (secret scan first), channel
+                                        📦・<owner>∕<name> + Laris row, each <oracle> in with its own thread, then
+                                        '📦 moved to' in the thread and it is archived. Last line: RESULT repo= room=
+                                        Existing repo first: without --name, a repo on this machine with a close
+                                        name stops the plan (exit 3, MATCH lines): confirm with --owner= --name=,
+                                        or --new for a new repo
+  maw soul archive   <owner/repo>      plan; put a finished repo room away: souls out (panes closed, threads archived),
+                                        /wt threads unlinked, other threads archived, room to 🗄️ Archive, Laris row
+                                        archived. Worktrees and the repo stay. --unarchive brings the room back
+  maw soul wt        <name> [repo]      plan; worktree <repo>/wt/<name> (branch wt/<name>, reused if there), then link:
+                                        thread <name> in the repo's layout-9 channel (--channel=<id>), forward row,
+                                        claude beside the bot body. --bot=<oracle> (default laris-labs-oracle).
+                                        Last line on success: RESULT thread=<id> pane=<pane> wt=<path>
+                                        --thread=<id>: use that EXISTING thread of the repo channel (no new post)
+  maw soul wt-close  <name> [repo]      plan; unlink it and archive the thread, the worktree stays
   maw soul link      <wt-path>          plan; a manual worktree joins an existing bot body by forward (no second gateway):
                                         thread opened by the bot, forward row in its access, claude in the wt beside it.
                                         --bot=<oracle> (default somsri-oracle) --channel=<id> --name=<thread> --pane=<id>
@@ -60,7 +87,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   --yes   run it. These write access rows: only on Nat's go from a terminal.
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
-const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink"]);
+const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close", "promote", "archive"]);
 const READS = new Set(["list", "ls", "check", "threads"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
@@ -74,10 +101,15 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const pin = args.find(a => a.startsWith("--channel="));
   const all = args.includes("--all");
   const off = args.includes("--off");
+  const owner = args.find(a => a.startsWith("--owner="));
+  const fresh = args.includes("--new");
+  const unarch = args.includes("--unarchive");
+  const by = args.find(a => a.startsWith("--by="));
   if (pin && !/^--channel=\d{15,22}$/.test(pin)) return { error: `${pin}: use --channel=<channel id>` };
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
-  const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel)=/.test(a));
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== "--off" && a !== chname && a !== pin && !linkOpts.includes(a));
+  const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel|thread)=/.test(a));
+  const ideaOpts = args.filter(a => /^--(dir|repo)=/.test(a) || a === "--public" || a === "--private");
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== "--off" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new" && a !== "--unarchive" && a !== by);
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
@@ -91,6 +123,25 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
     return { argv: ["icon", oracleName(pos[0]), ...pos.slice(1), ...(off ? ["--off"] : []), ...(d ? [] : ["--go"])], dry: d };
   }
   if (all && verb !== "ears") return { error: "--all goes with ears add, not " + verb };
+  if ((owner || fresh) && verb !== "promote") return { error: "--owner and --new go with promote, not " + verb };
+  if ((unarch || by) && verb !== "archive") return { error: "--unarchive and --by go with archive, not " + verb };
+  if (verb === "archive") {
+    if (pos.length !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(pos[0]!)) return { error: "which repo?\n  maw soul archive <owner/repo> [--unarchive] [--yes]" };
+    if (by && !/^--by=[\w.-]{1,40}$/.test(by)) return { error: `${by}: --by=<name>` };
+    const d = !yes || dryAsked;
+    return { argv: ["archive", pos[0]!, ...(unarch ? ["--unarchive"] : []), ...(by ? [by] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+  }
+  if (verb === "promote") {
+    const th = pos[0];
+    if (!th || !/^\d{15,22}$/.test(th)) return { error: "which thread?\n  maw soul promote <thread id> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]" };
+    if (denyMain || chname || pin) return { error: "--deny-main, --chname and --channel do not go with promote (the room is found or made by name)" };
+    if (linkOpts.some(a => !a.startsWith("--name=")) || ideaOpts.some(a => /^--(dir|repo)=/.test(a))) return { error: "promote takes --owner=<owner>, --name=<repo>, --public or --private" };
+    const nm = linkOpts.find(a => a.startsWith("--name="));
+    if (nm && !/^--name=[A-Za-z0-9._-]{1,100}$/.test(nm)) return { error: `${nm}: a repo name is letters, digits, '.', '_' and '-'` };
+    if (owner && !/^--owner=[A-Za-z0-9][A-Za-z0-9-]{0,38}$/.test(owner)) return { error: `${owner}: use --owner=<github owner>` };
+    const d = !yes || dryAsked;
+    return { argv: ["promote", th, ...pos.slice(1).map(oracleName), ...(owner ? [owner] : []), ...(nm ? [nm] : []), ...ideaOpts, ...(fresh ? ["--new"] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+  }
   if (verb === "ears") return earsPlan(pos, yes && !dryAsked, all, !!(denyMain || chname || pin || linkOpts.length));
   if (READS.has(verb)) {
     if (verb === "check" && !pos[0]) return { error: "which oracle?\n  maw soul check <oracle> [repo]" };
@@ -98,10 +149,40 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
     return { argv: [verb, ...pos], dry: false };
   }
   if (!WRITES.has(verb)) return { error: `unknown verb ${verb}\n  maw soul help` };
+  if (verb === "wt" || verb === "wt-close") {
+    const name = pos[0];
+    if (!name || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) return { error: `which name?\n  maw soul ${verb} <name> [repo]` };
+    if (pos.length > 2) return { error: `maw soul ${verb} <name> [repo]: one repo at most` };
+    if (denyMain || chname || ideaOpts.length) return { error: `--deny-main, --chname, --dir, --repo do not go with ${verb}` };
+    if (linkOpts.some(a => !/^--(bot|pane|thread)=/.test(a)) || (verb === "wt-close" && (pin || linkOpts.some(a => /^--(pane|thread)=/.test(a))))) return { error: `${verb} takes --bot=<oracle>${verb === "wt" ? ", --pane=<id>, --channel=<id> and --thread=<id>" : ""}` };
+    const th = linkOpts.find(a => a.startsWith("--thread="));
+    if (th && !/^--thread=\d{15,22}$/.test(th)) return { error: `${th}: use --thread=<thread id>` };
+    const d = !yes || dryAsked;
+    return { argv: [verb, name, ...pos.slice(1), ...linkOpts, ...(pin ? [pin] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+  }
   if (linkOpts.length && verb !== "link" && verb !== "unlink") return { error: "--bot, --name and --pane go with link / unlink" };
+  if (ideaOpts.length && verb !== "idea" && verb !== "convert") return { error: "--dir, --repo, --public and --private go with idea / convert" };
+  if (verb === "idea" || verb === "convert") {
+    const name = pos[0];
+    if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) return { error: `idea name: lowercase letters, digits and '-'\n  maw soul ${verb} <idea> ${verb === "idea" ? "<oracle>..." : "--repo=<owner/repo>"}` };
+    if (denyMain || chname) return { error: `--deny-main and --chname do not go with ${verb}` };
+    const d = !yes || dryAsked;
+    if (verb === "idea") {
+      if (pos.length < 2) return { error: "which oracles?\n  maw soul idea <idea> <oracle>..." };
+      if (ideaOpts.some(a => !a.startsWith("--dir="))) return { error: "idea takes --dir=<base> and --channel=<id>; --repo goes with convert" };
+      return { argv: ["idea", name, ...pos.slice(1).map(oracleName), ...ideaOpts, ...(pin ? [pin] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+    }
+    const repo = ideaOpts.find(a => a.startsWith("--repo="));
+    if (!repo || !/^--repo=[\w.-]+\/[\w.-]+$/.test(repo)) return { error: "convert needs --repo=<owner>/<repo>" };
+    if (pos.length > 1) return { error: "convert takes the souls from the idea's Laris row, not from the command line" };
+    return { argv: ["convert", name, ...ideaOpts, ...(pin ? [pin] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+  }
   if (verb === "link" || verb === "unlink") {
     if (!pos[0]) return { error: `which worktree?\n  maw soul ${verb} <wt-path> [--bot=<oracle>] [--yes]` };
     if (denyMain || chname) return { error: `--deny-main and --chname do not go with ${verb}` };
+    const thr = linkOpts.find(a => a.startsWith("--thread="));
+    if (thr && !/^--thread=\d{15,22}$/.test(thr)) return { error: `${thr}: use --thread=<thread id>` };
+    if (thr && linkOpts.some(a => a.startsWith("--whole-channel="))) return { error: "--whole-channel and --thread: pick one" };
     if (verb === "unlink" && (pin || linkOpts.some(a => !/^--(bot|whole-channel)=/.test(a)))) return { error: "unlink takes only --bot=<oracle> and --whole-channel=<id>" };
     const whole = linkOpts.find(a => a.startsWith("--whole-channel="));
     if (whole && !/^--whole-channel=\d{15,22}$/.test(whole)) return { error: `${whole}: use --whole-channel=<channel id>` };
