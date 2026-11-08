@@ -104,7 +104,7 @@ PY
   echo "  ✓ Laris row: channel $CH, repo $REPO"
 fi
 # --post=<channel or thread id> (Nat 2026-11-08 "/work . in the thread"): the report goes where /work was typed
-BOT=laris-labs-oracle $SAY ${POST:-$CH} "$(report $R | head -c 1900)" >/dev/null && echo "  ✓ report posted in <#${POST:-$CH}>"
+BOT=laris-labs-oracle $SAY ${POST:-$CH} "$(report $R | head -c 1900)" --focus $REPO >/dev/null && echo "  ✓ report posted in <#${POST:-$CH}>"
 okso=()
 if (( ${#todo} )); then
   zsh $HERE/bin/herdr-soul room $REPO $todo --channel=$CH --yes | grep -E 'done:|✗|stop|deny-main: main body on' || true
