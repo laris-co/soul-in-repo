@@ -255,9 +255,7 @@ PY
 wsof() { herdr --session $S worktree list --cwd "$R" | python3 -c 'import sys,json
 try: print(json.load(sys.stdin)["result"]["source"].get("source_workspace_id") or "")
 except Exception: print("")'; }
-MWS=$(wsof); [[ -n $MWS ]] || { herdr --session $S workspace create --cwd "$R" --label "$name" --no-focus >/dev/null; MWS=$(wsof); }
-P=$(herdr --session $S worktree open --workspace "$MWS" --path "$W" --label "wt/$oracle-soul" --no-focus \
-  | python3 -c 'import sys,re; print(re.search(r"\"pane_id\": ?\"([^\"]+)\"", sys.stdin.read()).group(1))')
+P=$(HERDR_SESSION=$S zsh ${0:A:h}/bin/repo-space "$R" "$W" "wt/$oracle-soul")   # anchor at main when the repo has no space (#25)
 herdr --session $S pane run $P "$W/.discord/launch.sh" >/dev/null
 fi
 # 6. Laris channel row: one per repo channel, requireMention false like the souls (Nat "why not same?"), answers only when tagged; old thread row kept (Nothing is Deleted)

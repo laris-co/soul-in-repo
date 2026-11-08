@@ -46,8 +46,8 @@ LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 EARS_BIN=${HERDR_SOUL_EARS:-$HERE/soul-ears}
-DRY=0; GO=0; YES=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; BOTSET=0; NAME=""; BPANE=""; WHOLE=""; THPIN=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
-for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle; BOTSET=1;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=};; --whole-channel=*) WHOLE=${a#*=};; --thread=*) THPIN=${a#*=};; --dir=*|--repo=*|--owner=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
+DRY=0; GO=0; YES=0; PANESET=0; ARGS=(); PASS=(); EARS=(); BOT=somsri-oracle; BOTSET=0; NAME=""; BPANE=""; WHOLE=""; THPIN=""   # PASS = flags handed to soul-in-repo.sh by `in`; EARS = flags for soul-ears
+for a in "$@"; do case $a in --dry) DRY=1;; --go) GO=1;; --yes) YES=1;; --bot=*) BOT=${${a#*=}%-oracle}-oracle; BOTSET=1;; --name=*) NAME=${a#*=};; --pane=*) BPANE=${a#*=}; PANESET=1;; --whole-channel=*) WHOLE=${a#*=};; --thread=*) THPIN=${a#*=};; --dir=*|--repo=*|--owner=*|--public|--private) PASS+=$a;; --all) EARS+=$a;; --migrate|--deny-main|--chname=*|--channel=*) PASS+=$a;; *) ARGS+=$a;; esac; done
 VERB=${ARGS[1]:-ls}
 
 repo_path() {  # $1 = owner/name | abs path | empty
@@ -421,7 +421,7 @@ PYT
     echo "  2. threads of the channel (they fall back to the channel row unless they have their own):"
     print -r -- $threads | awk '$1=="DENY"{$1="";print "       deny  "$0" -> {deny: true, linkedBy: wt}"} $1=="KEEP"{$1="";print "       keep  "$0" (already has a row)"}'
     (( ${#deny} )) || echo "       (none to deny)"
-    echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
+    echo "  3. own herdr space wt/${W:t} under its repo (--pane=<id>: split there instead), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
     echo "  4. test: Nat types a line in #$chname; the $BOT body forwards it to that pane, which answers with answerCmd"
     echo "     a thread opened later has no row and also forwards: deny it by hand if it is not for $W"
     (( run )) || { echo "plan only. To run (Nat's go): herdr-soul link $W --bot=$BOT --whole-channel=$CH --yes"; exit 0; }
@@ -459,7 +459,7 @@ print(f if f and f!=sys.argv[3] else "")' $ACC $THPIN $W)
     [[ $tstate = archived ]] && echo "  1. unarchive thread $THPIN (as $BOT); no new post, no new thread" || echo "  1. thread is open; no new post, no new thread"
     echo "  2. back up $ACC, ${${hasrow:#yes}:+add}${${hasrow:#no}:+update} groups[$THPIN] = {requireMention: false, forwardTo: $W,"
     echo "       answerCmd: \"$ANS\", allowFrom: [Nat, catbutter]}${${hasrow:#no}:+ (other keys of the existing row kept)}"
-    echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
+    echo "  3. own herdr space wt/${W:t} under its repo (--pane=<id>: split there instead), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
     echo "  4. test: Nat types a line in '$tname'; the $BOT body forwards it to that pane, which answers with answerCmd"
     (( run )) || { echo "plan only. To run (Nat's go): ${HERDR_SOUL_RERUN:-herdr-soul link $W --bot=$BOT${pin:+ $pin} --thread=$THPIN --yes}"; exit 0; }
     if [[ $tstate = archived ]]; then
@@ -480,7 +480,7 @@ json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $ACC $TH $W $ANS "$tname"
   echo "  1. as $BOT: post '🔗 $NAME' in channel $CH, open thread '$NAME' on it ($SAY --thread)"
   echo "  2. back up $ACC, add groups[<thread>] = {requireMention: false, forwardTo: $W,"
   echo "       answerCmd: \"$ANS\", allowFrom: [Nat, catbutter]}"
-  echo "  3. split $BPANE ($BOT body), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
+  echo "  3. own herdr space wt/${W:t} under its repo (--pane=<id>: split there instead), start claude in $W with env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR (an agent already in $W is reused)"
   echo "  4. test: Nat types a line in the thread; the $BOT body forwards it to that pane, which answers with answerCmd"
   (( run )) || { echo "plan only. To run (Nat's go): ${HERDR_SOUL_RERUN:-herdr-soul link $W --bot=$BOT${pin:+ $pin}${NAME:+ --name=$NAME} --yes}"; exit 0; }
   mid=$(BOT=$BOT $SAY $CH "🔗 $NAME: worktree ${W/#$HOME/~} joins through $BOT (forward, no second gateway)" | sed -n 's/^sent (id: \([0-9]*\))$/\1/p')
@@ -501,7 +501,11 @@ w=sys.argv[1]; a=json.load(sys.stdin)["result"]["agents"]
 print(next((x["pane_id"] for x in a if x.get("cwd")==w and x.get("agent")),""))' $W)
   if [[ -n $NP ]]; then echo "  ✓ agent already in $W ($NP): reused, no new pane"
   else
-    NP=$(herdr pane split $BPANE --direction down | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
+    if (( PANESET )); then   # --pane=<id> given: the old way, a split beside that pane
+      NP=$(herdr pane split $BPANE --direction down | python3 -c 'import json,sys;print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
+    else                     # its own space under its repo, like the souls (Nat 2026-11-08, issue #25)
+      NP=$(zsh $HERE/repo-space "$(git -C $W rev-parse --path-format=absolute --git-common-dir | xargs dirname)" "$W" "wt/${W:t}")
+    fi
     herdr pane run $NP "cd ${(q)W} && env -u DISCORD_BOT_TOKEN -u DISCORD_STATE_DIR claude --dangerously-skip-permissions" >/dev/null
     echo "  ✓ claude starting in $NP ($W)"
   fi
