@@ -84,7 +84,8 @@ for w in $wts; do echo "  $n. worktree ${w:t}: unlink (thread archived, row drop
 for o in $others; do echo "  $n. thread '${o#* }' (${o%% *}): archive"; n=$((n+1)); done
 echo "  $n. channel to 🗄️ Archive ($ARCH), line 'archived by $BY'"; n=$((n+1))
 snames=(${pairs%%=*}); echo "  $n. Laris row: archived, archived_souls = ${${(j:, :)snames}:-none}, tag-only (backup first)"
-echo "     the repo $REPO is not touched; nothing is deleted"
+echo "     then the repo's herdr anchor space closes when nothing is left under it
+     the repo $REPO is not touched; nothing is deleted"
 (( YES )) || { echo "plan only. To run (Nat's or catbutter's go): maw soul archive $REPO --yes"; exit 0; }
 
 for p in $pairs; do
@@ -109,4 +110,5 @@ r.update(archived=True, souls=[], threads={}, requireMention=True)
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)
 PY
 echo "  ✓ Laris row archived (backup beside $L)"
+zsh $HERE/bin/anchor-close $R || true   # the repo's empty anchor space goes too (#25 follow-up)
 echo "RESULT room=$CH state=archived"
