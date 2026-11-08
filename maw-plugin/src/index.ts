@@ -53,6 +53,9 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
                                         Existing repo first: without --name, a repo on this machine with a close
                                         name stops the plan (exit 3, MATCH lines): confirm with --owner= --name=,
                                         or --new for a new repo
+  maw soul archive   <owner/repo>      plan; put a finished repo room away: souls out (panes closed, threads archived),
+                                        /wt threads unlinked, other threads archived, room to 🗄️ Archive, Laris row
+                                        archived. Worktrees and the repo stay. --unarchive brings the room back
   maw soul wt        <name> [repo]      plan; worktree <repo>/wt/<name> (branch wt/<name>, reused if there), then link:
                                         thread <name> in the repo's layout-9 channel (--channel=<id>), forward row,
                                         claude beside the bot body. --bot=<oracle> (default laris-labs-oracle).
@@ -79,7 +82,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   --yes   run it. These write access rows: only on Nat's go from a terminal.
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
-const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close", "promote"]);
+const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close", "promote", "archive"]);
 const READS = new Set(["list", "ls", "check"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
@@ -94,17 +97,26 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   const all = args.includes("--all");
   const owner = args.find(a => a.startsWith("--owner="));
   const fresh = args.includes("--new");
+  const unarch = args.includes("--unarchive");
+  const by = args.find(a => a.startsWith("--by="));
   if (pin && !/^--channel=\d{15,22}$/.test(pin)) return { error: `${pin}: use --channel=<channel id>` };
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
   const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel|thread)=/.test(a));
   const ideaOpts = args.filter(a => /^--(dir|repo)=/.test(a) || a === "--public" || a === "--private");
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new");
+  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new" && a !== "--unarchive" && a !== by);
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
   if (unknown) return { error: `unknown flag ${unknown}\n  maw soul help` };
   if (all && verb !== "ears") return { error: "--all goes with ears add, not " + verb };
   if ((owner || fresh) && verb !== "promote") return { error: "--owner and --new go with promote, not " + verb };
+  if ((unarch || by) && verb !== "archive") return { error: "--unarchive and --by go with archive, not " + verb };
+  if (verb === "archive") {
+    if (pos.length !== 1 || !/^[\w.-]+\/[\w.-]+$/.test(pos[0]!)) return { error: "which repo?\n  maw soul archive <owner/repo> [--unarchive] [--yes]" };
+    if (by && !/^--by=[\w.-]{1,40}$/.test(by)) return { error: `${by}: --by=<name>` };
+    const d = !yes || dryAsked;
+    return { argv: ["archive", pos[0]!, ...(unarch ? ["--unarchive"] : []), ...(by ? [by] : []), ...(d ? ["--dry"] : ["--yes"])], dry: d };
+  }
   if (verb === "promote") {
     const th = pos[0];
     if (!th || !/^\d{15,22}$/.test(th)) return { error: "which thread?\n  maw soul promote <thread id> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]" };

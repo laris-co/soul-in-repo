@@ -159,3 +159,10 @@ test("promote --new passes through; --owner/--new only with promote", () => {
   expect(plan(["promote", T, "neo", "--new", "--yes"])).toEqual({ argv: ["promote", T, "neo-oracle", "--new", "--yes"], dry: false });
   expect("error" in plan(["in", "neo", "--new"])).toBe(true);
 });
+
+test("archive: one repo, plan unless --yes, --unarchive and --by pass through", () => {
+  expect(plan(["archive", "nat-build-with-oracle/promote-demo"])).toEqual({ argv: ["archive", "nat-build-with-oracle/promote-demo", "--dry"], dry: true });
+  expect(plan(["archive", "a/b", "--unarchive", "--by=nazt_", "--yes"])).toEqual({ argv: ["archive", "a/b", "--unarchive", "--by=nazt_", "--yes"], dry: false });
+  expect("error" in plan(["archive"])).toBe(true);
+  expect("error" in plan(["in", "neo", "--unarchive"])).toBe(true);
+});
