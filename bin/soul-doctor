@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""soul-doctor: list dead or stale soul access rows. READ-ONLY.
+
+    soul-doctor [repo] [--online] [-j]          (run as: herdr-soul doctor / maw soul doctor)
+
+Reads the access files of every bot on this machine:
+  Laris          $HERDR_SOUL_LARIS (default ~/.claude/channels/laris-labs-oracle/access.local.json)
+  other bots     $HERDR_SOUL_CHANNELS/*/access.local.json (default ~/.claude/channels)
+  Somsri         <ghq>/github.com/laris-co/somsri-oracle/.discord/access.json
+[repo] (owner/name) limits the room checks to that repo's row. Forward and deny checks always look at every file.
+
+Offline checks:
+  dead-forward     a row's forwardTo worktree is gone
+  dead-deny        a deny row's linkedBy worktree is gone
+  repo-missing     a live layout-9 room's repo is not cloned under <ghq>/github.com/
+  soul-no-body     a soul in souls[] has no <repo>/wt/<oracle>-soul/.discord
+                   (when its config.yaml machine: is another box: "remote: skipped (check on <label>)", not a finding)
+  thread-no-soul   threads{} has an oracle that is not in souls[]
+  archived-body-gone  an archived room's archived_bodies[] cwd is gone on this machine
+--online adds GETs (never writes):
+  thread-gone      a threads{} thread is 404 (Discord, Laris token from pass); an archived thread is only a "·" note,
+                   since Discord auto-archives quiet threads and a new post reopens them
+  channel-gone     a live room's channel is 404
+  remote souls     herdr --machine <label> agent list on that box: is an agent in wt/<oracle>-soul there?
+
+Output: one line per finding "✗ <check> <row> <detail> -> fix: <command>", then "N rows, M findings".
+-j prints JSON instead. Exit 0 when clean, 1 when there are findings, 2 on bad use.
+
+Read-only guarantee: every file is opened for reading; nothing is backed up, copied or written; Discord is
+asked with GET only, and only with --online. test/soul-doctor-readonly.zsh hashes the files before and after.
+"""
+import glob
+import json
+import os
+import socket
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+HOME = os.path.expanduser("~")
+
+
+def ghq_root():
+    r = os.environ.get("HERDR_SOUL_GHQ")
+    if r:
+        return r
+    try:
+        return subprocess.run(["ghq", "root"], capture_output=True, text=True, check=True).stdout.strip()
+    except Exception:
+        return os.path.join(HOME, "Code")
+
+
+GHQ = ghq_root()
+TEAM = os.environ.get("HERDR_SOUL_TEAM", "/opt/Code/github.com/laris-co/laris-team")
+LARIS = os.environ.get("HERDR_SOUL_LARIS", os.path.join(HOME, ".claude/channels/laris-labs-oracle/access.local.json"))
+CHANNELS = os.environ.get("HERDR_SOUL_CHANNELS", os.path.join(HOME, ".claude/channels"))
+SOMSRI = os.environ.get("HERDR_SOUL_SOMSRI", os.path.join(GHQ, "github.com/laris-co/somsri-oracle/.discord/access.json"))
+HERE_BOX = os.environ.get("HERDR_SOUL_MACHINE", socket.gethostname().split(".")[0].lower())
+SESSION = os.environ.get("HERDR_SESSION", "laris-co")
+
+
+def load(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f).get("groups", {})
+    except Exception:
+        return None
+
+
+def cfg(oracle, key):
+    try:
+        with open(os.path.join(TEAM, "oracles", oracle, "config.yaml"), "r", encoding="utf-8") as f:
+            for ln in f:
+                if ln.startswith(key + ":"):
+                    return ln.split(":", 1)[1].split("#")[0].strip().strip('"') or None
+    except Exception:
+        pass
+    return None
+
+
+def access_files():
+    seen, out = set(), []
+    for bot, path in [("laris-labs-oracle", LARIS)] + \
+            [(os.path.basename(os.path.dirname(p)), p) for p in sorted(glob.glob(os.path.join(CHANNELS, "*", "access.local.json")))] + \
+            [("somsri-oracle", SOMSRI)]:
+        real = os.path.realpath(path)
+        if real in seen or not os.path.isfile(path):
+            continue
+        seen.add(real)
+        out.append((bot, path))
+    return out
+
+
+def machine_label(box):
+    """herdr machine label for a box name: '<box>-<session>' if herdr knows it, else the box name."""
+    try:
+        out = subprocess.run(["herdr", "machine", "list"], capture_output=True, text=True, timeout=15).stdout
+        for ln in out.splitlines():
+            p = ln.split()
+            if len(p) >= 4 and p[1].startswith(box + "-") and p[3] == SESSION:
+                return p[1]
+    except Exception:
+        pass
+    return box
+
+
+def remote_has_body(label, wt_tail):
+    try:
+        out = subprocess.run(["herdr", "--machine", label, "agent", "list"], capture_output=True, text=True, timeout=30).stdout
+        agents = json.loads(out)["result"]["agents"]
+    except Exception:
+        return None
+    return any((a.get("cwd") or "").rstrip("/").endswith(wt_tail) for a in agents)
+
+
+def discord_get(path, token):
+    req = urllib.request.Request("https://discord.com/api/v10" + path, method="GET",
+                                 headers={"Authorization": "Bot " + token, "User-Agent": "herdr-soul doctor (soul-in-repo, 1)"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            return r.status, json.load(r)
+    except urllib.error.HTTPError as e:
+        return e.code, None
+    except Exception:
+        return 0, None
+
+
+def laris_token():
+    t = os.environ.get("HERDR_SOUL_TOKEN")
+    if t:
+        return t
+    try:
+        return subprocess.run(["pass", "show", "discord/laris-labs-oracle-token"], capture_output=True, text=True,
+                              check=True).stdout.splitlines()[0].strip()
+    except Exception:
+        return None
+
+
+def main(argv):
+    online = "--online" in argv
+    as_json = "-j" in argv or "--json" in argv
+    pos = [a for a in argv if not a.startswith("-")]
+    bad = [a for a in argv if a.startswith("-") and a not in ("--online", "-j", "--json")]
+    if bad or len(pos) > 1:
+        print("usage: herdr-soul doctor [owner/repo] [--online] [-j]", file=sys.stderr)
+        return 2
+    only = pos[0] if pos else None
+
+    findings, skipped, notes, nrows = [], [], [], 0
+
+    def add(check, bot, row, detail, fix):
+        findings.append({"check": check, "bot": bot, "row": row, "detail": detail, "fix": fix})
+
+    files = access_files()
+    laris = None
+    for bot, path in files:
+        g = load(path)
+        if g is None:
+            add("unreadable", bot, "-", path, "check the JSON by hand: python3 -m json.tool " + path)
+            continue
+        nrows += len(g)
+        if bot == "laris-labs-oracle":
+            laris = g
+        for key, r in g.items():
+            fw = r.get("forwardTo")
+            if fw and not os.path.isdir(fw):
+                add("dead-forward", bot, key, "forwardTo %s is gone" % fw, "herdr-soul unlink %s --bot=%s" % (fw, bot))
+            lb = r.get("linkedBy")
+            if r.get("deny") and lb and not os.path.isdir(lb):
+                add("dead-deny", bot, key, "deny row linkedBy %s is gone" % lb,
+                    "herdr-soul unlink %s --bot=%s --whole-channel=<channel id>" % (lb, bot))
+
+    token = laris_token() if online else None
+    if online and not token:
+        add("no-token", "laris-labs-oracle", "-", "--online needs the Laris token (pass discord/laris-labs-oracle-token)",
+            "pass show discord/laris-labs-oracle-token")
+    labels = {}
+
+    for key, r in (laris or {}).items():
+        if r.get("layout") != 9:
+            continue
+        repo = r.get("repo") or "?"
+        if only and repo != only:
+            continue
+        archived = bool(r.get("archived"))
+        rp = os.path.join(GHQ, "github.com", repo)
+        if archived:
+            for b in r.get("archived_bodies", []) or []:
+                box = (b.get("machine") or HERE_BOX).lower()
+                cwd = b.get("cwd")
+                if cwd and box == HERE_BOX and not os.path.isdir(cwd):
+                    add("archived-body-gone", "laris-labs-oracle", key, "%s %s slept in %s, which is gone" % (b.get("kind", "?"), b.get("who", "?"), cwd),
+                        "look before /work %s: that body cannot wake there" % repo)
+            continue
+        if not os.path.isdir(rp):
+            add("repo-missing", "laris-labs-oracle", key, "room for %s, repo not at %s" % (repo, rp),
+                "ghq get %s  (or /done the room: herdr-soul archive %s)" % (repo, repo))
+        souls = r.get("souls", []) or []
+        for o in souls:
+            wt = os.path.join(rp, "wt", o + "-soul")
+            if os.path.isdir(os.path.join(wt, ".discord")):
+                continue
+            box = (cfg(o, "machine") or HERE_BOX).lower()
+            if box != HERE_BOX:
+                label = labels.setdefault(box, machine_label(box))
+                if online:
+                    live = remote_has_body(label, "/wt/%s-soul" % o)
+                    if live is False:
+                        add("soul-no-body", "laris-labs-oracle", key, "%s in souls[] of %s, no agent in wt/%s-soul on %s" % (o, repo, o, label),
+                            "herdr --machine %s agent prompt <pane> 'herdr-soul ls %s'" % (label, repo))
+                        continue
+                    if live:
+                        continue
+                skipped.append({"row": key, "soul": o, "repo": repo, "label": label})
+                continue
+            add("soul-no-body", "laris-labs-oracle", key, "%s in souls[] of %s, no %s/.discord" % (o, repo, wt),
+                "herdr-soul in %s %s  (or herdr-soul out %s %s)" % (o, repo, o, repo))
+        for o, th in (r.get("threads", {}) or {}).items():
+            if o not in souls:
+                add("thread-no-soul", "laris-labs-oracle", key, "threads{%s: %s} but %s is not in souls[]" % (o, th, o),
+                    "by hand: back up %s, drop groups.%s.threads.%s" % (LARIS, key, o))
+        if online and token:
+            code, _ = discord_get("/channels/" + str(r.get("channel") or key), token)
+            if code == 404:
+                add("channel-gone", "laris-labs-oracle", key, "room channel for %s is 404" % repo,
+                    "herdr-soul archive %s  (the row stays as history)" % repo)
+            for o, th in (r.get("threads", {}) or {}).items():
+                code, body = discord_get("/channels/" + str(th), token)
+                if code == 404:
+                    add("thread-gone", "laris-labs-oracle", key, "%s's thread %s is 404" % (o, th), "herdr-soul in %s %s" % (o, repo))
+                elif code == 200 and (body or {}).get("thread_metadata", {}).get("archived"):
+                    # Discord auto-archives quiet threads and a new post reopens them: a note, not a finding
+                    notes.append("%s %s's thread %s is archived (Discord auto-archive; a post reopens it)" % (key, o, th))
+
+    if as_json:
+        print(json.dumps({"rows": nrows, "files": [p for _, p in files], "findings": findings, "skipped": skipped,
+                          "notes": notes, "online": online}, ensure_ascii=False, indent=2))
+    else:
+        for f in findings:
+            print("✗ %s %s %s -> fix: %s" % (f["check"], f["row"], f["detail"], f["fix"]))
+        for s in skipped:
+            print("· remote: skipped (check on %s) %s %s in %s" % (s["label"], s["row"], s["soul"], s["repo"]))
+        for n in notes:
+            print("· " + n)
+        print("%d rows in %d access files, %d findings%s" % (nrows, len(files), len(findings),
+                                                              ", %d remote skipped" % len(skipped) if skipped else ""))
+    return 1 if findings else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

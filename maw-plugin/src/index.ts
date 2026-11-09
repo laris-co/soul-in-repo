@@ -17,6 +17,7 @@
 //   maw soul link    <wt-path>             a manual worktree joins an existing bot body by forward (no second gateway)
 //   maw soul unlink  <wt-path>             archive its thread, drop the forward row (--whole-channel: + its deny rows)
 //   maw soul threads [repo]                which soul hears which thread (Discord names, GET only)
+//   maw soul doctor  [repo] [--online] [-j]  read-only: dead forward/deny rows, rooms missing a repo or soul body
 //   maw soul icon    <oracle> [repo]       plan; --yes renames the soul's own thread to '<icon>・<oracle>' (--off removes)
 //   maw soul ears    <oracle> [repo] [ls]  threads the body hears; add|rm <thread> [--all]: plan, --yes writes
 //                                          (herdr-soul ears --go, which runs bin/soul-ears on the body's own access.json)
@@ -76,6 +77,8 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   maw soul unlink    <wt-path>          plan; archive the thread, drop the forward row + its deny rows (backup).
                                         --bot=<oracle> --whole-channel=<id>
   maw soul threads   [repo]             every thread the repo's souls hear: name, open/archived, who hears it
+  maw soul doctor    [repo]             read-only: dead forward/deny rows, rooms whose repo or soul body is gone,
+                                        threads{} without a soul. --online: Discord GETs + remote boxes. -j: JSON
   maw soul icon      <oracle> [repo]    plan; add --yes to rename the soul's own thread '<icon>・<oracle>'
                                         (icon: from its config.yaml); --off takes the icon away
   maw soul ears      <oracle> [repo]    threads the body hears: own thread, office (joined), old rows
@@ -92,7 +95,7 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   HERDR_SOUL_BIN=<path>  use another herdr-soul (default: ../../bin/herdr-soul beside this plugin)`;
 
 const WRITES = new Set(["in", "out", "migrate", "room", "link", "unlink", "idea", "convert", "wt", "wt-close", "promote", "archive", "work"]);
-const READS = new Set(["list", "ls", "check", "threads"]);
+const READS = new Set(["list", "ls", "check", "threads", "doctor"]);
 
 const oracleName = (o: string) => (o.endsWith("-oracle") ? o : `${o}-oracle`);
 
@@ -113,11 +116,13 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   if (chname && !["--chname=slash", "--chname=dash"].includes(chname)) return { error: `${chname}: use --chname=slash or --chname=dash` };
   const linkOpts = args.filter(a => /^--(bot|name|pane|whole-channel|thread)=/.test(a));
   const ideaOpts = args.filter(a => /^--(dir|repo)=/.test(a) || a === "--public" || a === "--private");
-  const rest = args.filter(a => a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== "--off" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new" && a !== "--unarchive" && a !== by && !/^--post=\d{15,22}$/.test(a));
+  const docFlags = args.filter(a => a === "--online" || a === "-j" || a === "--json");
+  const rest = args.filter(a => !docFlags.includes(a) && a !== "--yes" && a !== "--dry" && a !== "--deny-main" && a !== "--all" && a !== "--off" && a !== chname && a !== pin && !linkOpts.includes(a) && !ideaOpts.includes(a) && a !== owner && a !== "--new" && a !== "--unarchive" && a !== by && !/^--post=\d{15,22}$/.test(a));
   const verb = rest[0] ?? "ls";
   const pos = rest.slice(1);
   const unknown = pos.find(a => a.startsWith("--"));
   if (unknown) return { error: `unknown flag ${unknown}\n  maw soul help` };
+  if (docFlags.length && verb !== "doctor") return { error: `${docFlags[0]} goes with doctor, not ${verb}` };
   if (off && verb !== "icon") return { error: "--off goes with icon, not " + verb };
   if (verb === "icon") {
     if (all || denyMain || chname || pin || linkOpts.length) return { error: "icon takes only [repo] [--off] [--yes]" };
@@ -157,6 +162,10 @@ export function plan(args: string[]): { argv: string[]; dry: boolean } | { error
   if (READS.has(verb)) {
     if (verb === "check" && !pos[0]) return { error: "which oracle?\n  maw soul check <oracle> [repo]" };
     if (verb === "check") return { argv: ["check", oracleName(pos[0]!), ...pos.slice(1)], dry: false };
+    if (verb === "doctor") {
+      if (pos.length > 1) return { error: "maw soul doctor [owner/repo] [--online] [-j]: one repo at most" };
+      return { argv: ["doctor", ...pos, ...docFlags], dry: false };
+    }
     return { argv: [verb, ...pos], dry: false };
   }
   if (!WRITES.has(verb)) return { error: `unknown verb ${verb}\n  maw soul help` };

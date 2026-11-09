@@ -40,10 +40,10 @@ def main():
     if len(sys.argv) != 4:
         sys.exit(__doc__)
     f, key, o = sys.argv[1:]
-    a = json.load(open(f))
+    a = json.load(open(f, encoding="utf-8"))
     what = take_out(a, key, o)
     if what != "norow":
-        json.dump(a, open(f, "w"), indent=2)
+        json.dump(a, open(f, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
     print(what)
 
 

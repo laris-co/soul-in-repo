@@ -34,6 +34,7 @@ Built 2026-11-05/06 by Laris Labs Oracle (AI) with Nat in #research › repo-sou
 
 ```bash
 bin/herdr-soul list | ls [repo] | check <oracle> [repo] | in <oracle> [repo] [--dry] | out <oracle> [repo] [--go]
+bin/herdr-soul doctor [repo] [--online] [-j]   # read-only health check of every access row; exit 1 on findings
 bin/herdr-soul ears <oracle> [repo] [ls | add <thread> [--all] | rm <thread>] [--go]
 ```
 
@@ -54,6 +55,7 @@ maw soul migrate <oracle> [repo] [--deny-main] [--chname=dash] [--yes]
 maw soul out <oracle> [repo] [--yes]
 maw soul ears <oracle> [repo] [add|rm <thread>] [--all] [--yes]
 maw soul threads [repo]                     # which soul hears which thread (Discord GETs only)
+maw soul doctor  [repo] [--online] [-j]     # read-only: dead forward/deny rows, rooms missing a repo or soul body
 maw soul icon <oracle> [repo] [--off] [--yes] # own thread renamed '<icon>・<oracle>' by the soul's own bot
 ```
 

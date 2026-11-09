@@ -192,3 +192,10 @@ test("archive help says it sleeps and wakes, never restarts (laris-team#210)", a
   expect(r.output).toContain("wakes them where they slept");
   expect(plan(["archive", "o/r", "--unarchive"])).toEqual({ argv: ["archive", "o/r", "--unarchive", "--dry"], dry: true });
 });
+
+test("doctor is a read: no --dry, its own flags pass through", () => {
+  expect(plan(["doctor"])).toEqual({ argv: ["doctor"], dry: false });
+  expect(plan(["doctor", "laris-co/x", "--online", "-j"])).toEqual({ argv: ["doctor", "laris-co/x", "--online", "-j"], dry: false });
+  expect((plan(["ls", "--online"]) as { error: string }).error).toContain("goes with doctor");
+  expect("error" in plan(["doctor", "a/b", "c/d"])).toBe(true);
+});
