@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""soul-row-out: take one soul out of a Laris access row (used by `herdr-soul out`).
+
+    soul-row-out <access.json> <row key> <oracle>
+
+The row is edited in place. The caller backs the file up first. The one line printed says what happened:
+  dropped  <oracle> left souls[] (and threads{}); other souls stay
+  kept     <oracle> was the last soul of a layout-9 room: the row stays with souls [] and threads {}.
+           The row belongs to the repo CHANNEL, so Laris still hears the room and /work reuses it.
+           note and requireMention are not touched. (Issue #38: this row was lost 3 times and restored by hand.)
+  removed  <oracle> was the last soul of a legacy per-thread row: that row IS the thread, so it goes
+  norow    no row under that key: nothing changed
+"""
+import json
+import sys
+
+
+def take_out(a, key, o):
+    g = a.get("groups", {})
+    r = g.get(key)
+    if r is None:
+        return "norow"
+    rest = [s for s in r.get("souls", []) if s != o]
+    if r.get("layout") == 9:
+        r["souls"] = rest
+        r.setdefault("threads", {}).pop(o, None)
+        if rest:
+            r["note"] = "repo channel %s (layout 9): souls %s each answer in their own thread; Laris hears every line, answers only when tagged" % (r.get("channel", "?"), ", ".join(rest))
+            return "dropped"
+        return "kept"
+    if rest:
+        r["souls"] = rest
+        r["note"] = r.get("note", "").split(": souls ")[0] + ": souls " + ", ".join(rest) + " answer with their own bots when tagged; Laris hears (own thread), silent unless tagged"
+        return "dropped"
+    g.pop(key, None)
+    return "removed"
+
+
+def main():
+    if len(sys.argv) != 4:
+        sys.exit(__doc__)
+    f, key, o = sys.argv[1:]
+    a = json.load(open(f))
+    what = take_out(a, key, o)
+    if what != "norow":
+        json.dump(a, open(f, "w"), indent=2)
+    print(what)
+
+
+if __name__ == "__main__":
+    main()

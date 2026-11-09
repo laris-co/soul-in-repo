@@ -560,7 +560,7 @@ else: print("none")' $LARIS ${key:-x} $o)
     echo "  2. no Laris row for thread ${th:-?}: nothing to change there"
     echo "  3. thread ${th:-?} not archived (no row says who lives in it)"
   elif (( l9 )); then
-    [[ $left = none ]] && echo "  2. remove Laris row for channel $key ($o was the last soul; backup first; the channel stays)" \
+    [[ $left = none ]] && echo "  2. keep Laris row for channel $key, souls: none ($o was the last soul; backup first; drop threads{$o}; the room stays hearable)" \
                        || echo "  2. drop $o from souls[] and threads{} of channel $key (backup first); stays: $left"
     echo "  3. archive thread ${th:-?} ($o's own thread; Nothing is Deleted: it stays readable)"
   elif [[ $left = none ]]; then
@@ -576,17 +576,7 @@ else: print("none")' $LARIS ${key:-x} $o)
   zsh $HERE/anchor-close $R || true   # the repo's anchor space goes when this was the last space under it
   if [[ -n $th && $left != norow ]]; then
     cp $LARIS $LARIS.bak-$(date +%Y%m%d-%H%M%S)-soul-out
-    python3 -c 'import json,sys
-f,t,o=sys.argv[1:]; a=json.load(open(f)); g=a.get("groups",{}); r=g.get(t,{})
-rest=[s for s in r.get("souls",[]) if s!=o]
-if rest and r.get("layout")==9:
-    r["souls"]=rest; r.get("threads",{}).pop(o,None)
-    r["note"]="repo channel %s (layout 9): souls %s each answer in their own thread; Laris hears every line, answers only when tagged" % (r.get("channel","?"), ", ".join(rest))
-elif rest:
-    r["souls"]=rest
-    r["note"]=r.get("note","").split(": souls ")[0]+": souls "+", ".join(rest)+" answer with their own bots when tagged; Laris hears (own thread), silent unless tagged"
-else: g.pop(t,None)
-json.dump(a,open(f,"w"),indent=2)' $LARIS $key $o && echo "  ✓ Laris row updated ($o out)"
+    what=$(python3 $HERE/soul-row-out $LARIS $key $o) && echo "  ✓ Laris row: $what ($o out)"
   fi
   if [[ -n $th ]] && { (( l9 )) || [[ $left = none ]]; }; then
     T=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
