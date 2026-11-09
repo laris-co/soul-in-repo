@@ -38,6 +38,9 @@
 #                                        (backup .bak-<ts>-ears first; rm keeps the entry under "removed")
 #   herdr-soul threads [repo]            every thread the repo's soul bodies hear: Discord name, archived?, which souls
 #                                        hear it and how (Discord GETs with each soul's own token; changes nothing)
+#   herdr-soul doctor [repo] [--online] [-j]   READ-ONLY: dead forwardTo / deny rows, rooms whose repo or soul body is
+#                                        gone, threads{} without a soul; --online adds Discord GETs and asks remote boxes'
+#                                        herdr agent list. One line per finding with its fix; exit 1 when there are findings
 #   herdr-soul icon  <oracle> [repo] [--off]  plan to rename the soul's own thread to '<icon>・<oracle>' (icon: from
 #                                        oracles/<o>/config.yaml); --go (or --yes) renames it with the soul's own bot
 # Laris rows, newest first. layout 9 (2026-11-07 06:34Z): one row per repo CHANNEL (<owner>∕<repo>), "layout": 9,
@@ -603,6 +606,11 @@ ears)
     python3 -I $EARS_BIN $sub $th $EARS --body $W --dry
     echo "(plan only; add --go to write $W/.discord/access.json, backup .bak-<ts>-ears first; only on Nat's or catbutter's go)"
   fi
+  ;;
+
+doctor)
+  # read-only: bin/soul-doctor opens every access file for reading only and writes nothing (test/soul-doctor-readonly.zsh)
+  exec python3 $HERE/soul-doctor ${ARGS[2,-1]}
   ;;
 
 threads)
