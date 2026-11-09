@@ -185,3 +185,10 @@ test("work: a repo or a github url, then oracles", () => {
   expect(plan(["work", "a/b", "neo", "--yes"])).toEqual({ argv: ["work", "a/b", "neo-oracle", "--yes"], dry: false });
   expect("error" in plan(["work"])).toBe(true);
 });
+
+test("archive help says it sleeps and wakes, never restarts (laris-team#210)", async () => {
+  const r = await handler({ source: "cli", args: ["help"] });
+  expect(r.output).toContain("sleep on");
+  expect(r.output).toContain("wakes them where they slept");
+  expect(plan(["archive", "o/r", "--unarchive"])).toEqual({ argv: ["archive", "o/r", "--unarchive", "--dry"], dry: true });
+});

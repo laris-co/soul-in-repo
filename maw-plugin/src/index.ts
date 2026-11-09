@@ -58,9 +58,10 @@ const HELP = `maw soul — an oracle's soul at work inside another repo (front f
   maw soul work      <owner/repo|url> [<oracle>...]   plan; the repo (cloned if missing), its room (reused, else made
                                         in ⚡ active), a report posted there (README, commits, PRs/issues, checkouts),
                                         souls brought in. Last line: RESULT repo= room= souls=
-  maw soul archive   <owner/repo>      plan; put a finished repo room away: souls out (panes closed, threads archived),
-                                        /wt threads unlinked, other threads archived, room to 🗄️ Archive, Laris row
-                                        archived. Worktrees and the repo stay. --unarchive brings the room back
+  maw soul archive   <owner/repo>      plan; put a finished repo room away (= /done in the room): souls 💤 sleep on
+                                        their own machine, idle /wt and main agents 💤 (busy ones kept and named),
+                                        threads archived, room to 🗄️ Archive, the row records where each body slept.
+                                        Worktrees and the repo stay. --unarchive (= /work) wakes them where they slept
   maw soul wt        <name> [repo]      plan; worktree <repo>/wt/<name> (branch wt/<name>, reused if there), then link:
                                         thread <name> in the repo's layout-9 channel (--channel=<id>), forward row,
                                         claude beside the bot body. --bot=<oracle> (default laris-labs-oracle).
