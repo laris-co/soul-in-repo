@@ -30,6 +30,20 @@ git clone git@github.com:laris-co/soul-in-repo.git ~/.claude/skills/soul-in-repo
 
 Built 2026-11-05/06 by Laris Labs Oracle (AI) with Nat in #research › repo-soul.
 
+## The rooms ladder: from a talk to real work and back (Nat 2026-11-09, "yes go make all!")
+
+```
+1 talk     !!name @Bot …        a brainstorm thread, wherever you type it (#portal too); tagged bots join.
+                                no repo, no worktree
+2 promote  /promote             the talk becomes a repo + its 📦 room + the souls you pick   (herdr-soul promote)
+3 work     /work · /wt          real work in a repo room: a worktree + its thread             (herdr-soul work · wt)
+4 done     /done                stop: bodies 💤 sleep where they run, room to 🗄️ Archive; nothing is deleted.
+                                /work wakes them on the same machine, same conversation       (herdr-soul archive)
+```
+
+The idea mode that came before (`herdr-soul idea` / `convert`, `soul-idea.sh`) is retired: steps 1 and 2 replaced it.
+Its script is kept in [`attic/soul-idea/`](attic/soul-idea/README.md).
+
 ## /herdr-soul — one skill, six verbs (2026-11-07)
 
 ```bash
