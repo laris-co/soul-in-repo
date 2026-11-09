@@ -110,21 +110,13 @@ test("threads reads; icon is a plan unless --yes", () => {
   expect(err(["ls", "--off"])).toContain("--off goes with icon");
 });
 
-test("idea: channel per idea, oracles named, plan unless --yes", () => {
-  expect(plan(["idea", "fake-idea", "neo", "pulse"])).toEqual({ argv: ["idea", "fake-idea", "neo-oracle", "pulse-oracle", "--dry"], dry: true });
-  expect(plan(["idea", "fake-idea", "neo", "--dir=/tmp/x", "--channel=1568636860144816248", "--yes"])).toEqual({ argv: ["idea", "fake-idea", "neo-oracle", "--dir=/tmp/x", "--channel=1568636860144816248", "--yes"], dry: false });
-  expect("error" in plan(["idea", "Fake_Idea", "neo"])).toBe(true);
-  expect("error" in plan(["idea", "fake-idea"])).toBe(true);
-  expect("error" in plan(["idea", "fake-idea", "neo", "--repo=a/b"])).toBe(true);
+test("idea / convert are retired: the error names !! + promote", () => {
+  for (const v of [["idea", "fake-idea", "neo"], ["convert", "fake-idea", "--repo=laris-co/x"]]) {
+    const e = plan(v) as { error: string };
+    expect(e.error).toContain("retired");
+    expect(e.error).toContain("maw soul promote <thread>");
+  }
   expect("error" in plan(["in", "neo", "--dir=/tmp"])).toBe(true);
-});
-
-test("convert: --repo required, souls come from the Laris row", () => {
-  expect(plan(["convert", "fake-idea", "--repo=laris-co/fake-idea-test"])).toEqual({ argv: ["convert", "fake-idea", "--repo=laris-co/fake-idea-test", "--dry"], dry: true });
-  expect(plan(["convert", "fake-idea", "--repo=laris-co/x", "--public", "--yes"])).toEqual({ argv: ["convert", "fake-idea", "--repo=laris-co/x", "--public", "--yes"], dry: false });
-  expect("error" in plan(["convert", "fake-idea"])).toBe(true);
-  expect("error" in plan(["convert", "fake-idea", "--repo=nope"])).toBe(true);
-  expect("error" in plan(["convert", "fake-idea", "neo", "--repo=a/b"])).toBe(true);
 });
 
 test("wt / wt-close: named worktree joined by forward, plan unless --yes", () => {

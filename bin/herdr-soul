@@ -16,10 +16,6 @@
 #                                        without a row gets {deny: true, linkedBy: <wt>} (they would fall back to the channel)
 #   herdr-soul unlink <wt-path> [--bot=<oracle>] [--whole-channel=<id>]   archive that thread (whole channel: none) and drop
 #                                        the forward row + the deny rows link wrote (backup). Plan; --yes runs.
-#   herdr-soul idea  <idea> <oracle>... [--channel=<id>] [--dir=<base>] [--yes]   IDEA MODE: channel 💡・<idea>, a thread
-#                                        per soul (its own bot), body = scratch dir (<soul>/ψ/lab/<idea>). Plan; --yes runs.
-#   herdr-soul convert <idea> --repo=<owner/repo> [--public] [--yes]   idea -> repo: create/get the repo, rename the
-#                                        channel 📦・<owner>∕<repo>, rebuild each soul in <repo>/wt on the SAME thread.
 #   herdr-soul work <owner/repo|url> [<oracle>...] [--yes]   find/clone the repo, its room (reuse or ⚡ active), a report, souls
 #   herdr-soul archive <repo> [--unarchive] [--by=<name>] [--yes]   souls out, threads archived, room to 🗄️ Archive. soul-archive.sh
 #   herdr-soul promote <thread> [<oracle>...] [--owner=<owner>] [--name=<repo>] [--public] [--yes]   a talk thread ->
@@ -283,9 +279,9 @@ room)
   ;;
 
 idea|convert)
-  # Nat 2026-11-07 22:03 "yes go!" (via Laris): idea mode before a repo exists, then convert. Logic in soul-idea.sh.
-  (( YES && !DRY )) && y=(--yes) || y=()
-  exec zsh $HERE/../soul-idea.sh $VERB ${ARGS[2,-1]} $PASS $y
+  # retired 2026-11-09 (Nat "yes go make all!"): a talk thread (!!name @Bot) + /promote replaced idea mode; attic/soul-idea/
+  echo "herdr-soul $VERB is retired: talk in a '!!name @Bot' thread, then /promote it (herdr-soul promote <thread>)."
+  echo "  the old script is kept in attic/soul-idea/ (never run with --yes)"; exit 2
   ;;
 
 work)
