@@ -21,6 +21,11 @@
 #          skipped when a live body already runs there or here (herdr agent list by cwd), so never a second body.
 #          Souls of an old archive (no record) come back with herdr-soul in, after the same live-body check.
 # Plan by default (GETs only); --yes runs (Nat's or catbutter's go). Last line: RESULT room=<id> state=archived|active
+# Tag + where (Nat 2026-11-09 "if /work or archive tag me let me see where go", "and then can you check like /ls"):
+#   SOUL_TAG=<discord user id>  every line posted in the room ends with <@id>, so the caller is pinged there
+#   SOUL_FROM=<channel id>      where the command was typed; when that is not the room, '<@id> 👉 <#room>' is posted there
+#   when the run ends, the repo's part of `maw ls` is posted in the room (laris-team tools/room-ls.sh)
+#   SOUL_CHILD=1                a step of a bigger command (/work's unarchive, room /done): tag only, no pointer, no view
 set -euo pipefail
 HERE=${0:A:h}
 L=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}
@@ -30,6 +35,7 @@ ACTIVE=${SOUL_PROMOTE_CATEGORY:-1568658399149821952}  # ⚡ active
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
 SAY=$TEAM/tools/discord-say.sh
 SP=${SOUL_SPACE_SLEEP:-$TEAM/tools/space-sleep.sh}   # sleep / wake / where / draft / on <machine> (laris-team)
+source $HERE/bin/soul-tag.zsh   # TAG, FROM, soul_where <room> <repo> [<also-skip channel>]
 HOST=$(hostname -s)
 REPO=""; UN=0; YES=0; DRY=0; BY=Nat
 for a in "$@"; do case $a in --yes) YES=1;; --dry) DRY=1;; --unarchive) UN=1;; --by=*) BY=${a#*=};;
@@ -128,7 +134,7 @@ PY
     t=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["groups"][sys.argv[2]].get("threads",{}).get(sys.argv[3],""))' $L $CH $o)
     [[ -n $t ]] && api -o /dev/null -w "  ✓ $o: thread $t open again (HTTP %{http_code})\n" -X PATCH https://discord.com/api/v10/channels/$t -d '{"archived":false}' || true
   done
-  BOT=laris-labs-oracle $SAY $CH "📦 **unarchived** by $BY · waking: ${${(j:, :)wnames}:-none}${fresh:+ · back in: ${(j:, :)fresh}}" >/dev/null && echo "  ✓ line in the room"
+  BOT=laris-labs-oracle $SAY $CH "📦 **unarchived** by $BY · waking: ${${(j:, :)wnames}:-none}${fresh:+ · back in: ${(j:, :)fresh}}$TAG" >/dev/null && echo "  ✓ line in the room"
   for b in $wake; do
     IFS=$'\t' read -r who kind cwd mach lab <<< "$b"
     [[ $mach = $HOST ]] && mach=local
@@ -142,6 +148,7 @@ PY
 f,ch=sys.argv[1:]; a=json.load(open(f)); r=a["groups"][ch]; r["archived_souls"]=[o for o in r.get("archived_souls",[]) if o not in r.get("souls",[])]
 r["archived_bodies"]=[b for b in r.get("archived_bodies",[]) if b.get("kind")=="wt"]
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)' $L $CH
+  soul_where $CH $REPO
   echo "RESULT room=$CH state=active"; exit 0
 fi
 
@@ -221,7 +228,7 @@ nap main main $R   # space kept here: anchor-close below closes it when nothing 
 for o in $others; do api -o /dev/null -w "  ✓ thread '${o#* }' archived (HTTP %{http_code})\n" -X PATCH https://discord.com/api/v10/channels/${o%% *} -d '{"archived":true}'; done
 mainline=""; [[ -n ${(M)kept:#main *} ]] && mainline=" · main still working: ${${(M)kept:#main *}#main }"
 others_kept=(${kept:#main *})
-BOT=laris-labs-oracle $SAY $CH "🗄️ **archived** by $BY · 💤 asleep: ${${(j:, :)asleep}:-none}${others_kept:+ · kept (working): ${(j:, :)others_kept}}$mainline · worktrees + repo kept (nothing deleted) · \`/work\` here wakes them" >/dev/null && echo "  ✓ line in the room"
+BOT=laris-labs-oracle $SAY $CH "🗄️ **archived** by $BY · 💤 asleep: ${${(j:, :)asleep}:-none}${others_kept:+ · kept (working): ${(j:, :)others_kept}}$mainline · worktrees + repo kept (nothing deleted) · \`/work\` here wakes them$TAG" >/dev/null && echo "  ✓ line in the room"
 api -o /dev/null -w "  ✓ channel to 🗄️ Archive (HTTP %{http_code})\n" -X PATCH https://discord.com/api/v10/channels/$CH -d "{\"parent_id\":\"$ARCH\"}"
 cp -p $L $L.bak-$(date +%Y%m%d-%H%M%S)-archive
 python3 - $L $CH $REC <<'PY'
@@ -238,4 +245,5 @@ PY
 rm -f $REC
 echo "  ✓ Laris row archived (backup beside $L)"
 zsh $HERE/bin/anchor-close $R || true   # the repo's anchor space goes too once its main agent sleeps (#25, laris-team#210)
+soul_where $CH $REPO
 echo "RESULT room=$CH state=archived${kept:+ kept=${(j:,:)${kept%% *}}}"

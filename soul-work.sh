@@ -13,6 +13,11 @@
 # --post=<id>: post the report in that channel or thread instead of the room (/work typed inside a room).
 # Plan by default: the report is printed, nothing is created or posted. --yes runs (Nat's or catbutter's go).
 # Last line of a run: RESULT repo=<o/r> room=<id> souls=<a,b|->
+# Tag + where (Nat 2026-11-09 "if /work or archive tag me let me see where go", "and then can you check like /ls"):
+#   SOUL_TAG=<discord user id>  every line posted in the room ends with <@id>, so the caller is pinged there
+#   SOUL_FROM=<channel id>      where the command was typed; when that is not the room, '<@id> 👉 <#room>' is posted there
+#   when the run ends, the repo's part of `maw ls` is posted in the room (laris-team tools/room-ls.sh)
+#   SOUL_CHILD=1                a step of a bigger command (/work's unarchive, room /done): tag only, no pointer, no view
 set -euo pipefail
 HERE=${0:A:h}
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
@@ -21,6 +26,7 @@ GUILD=1560847800881643520
 ROOMCAT=${SOUL_PROMOTE_CATEGORY:-1568658399149821952}   # ⚡ active
 PREFIX=${SOUL_CHPREFIX-📦・}
 SAY=$TEAM/tools/discord-say.sh
+source $HERE/bin/soul-tag.zsh   # TAG, FROM, soul_where <room> <repo> [<also-skip channel>]
 ghq=$(ghq root)
 REPO=""; YES=0; DRY=0; ORACLES=(); POST=""
 for a in "$@"; do case $a in --yes) YES=1;; --dry) DRY=1;; --post=*) POST=${a#*=};; --*) echo "unknown $a"; exit 2;;
@@ -87,7 +93,7 @@ report $R | sed 's/^/     | /'
 (( YES )) || { echo "plan only. To run (Nat's or catbutter's go): maw soul work $REPO${ORACLES:+ ${(j: :)ORACLES}} --yes"; exit 0; }
 
 # ════ RUN ════
-(( UNARCH )) && zsh $HERE/soul-archive.sh $REPO --unarchive --by=work --yes | grep -E '✓|✗|☀️|done:|stop' | sed 's/^/  unarchive: /' || true
+(( UNARCH )) && SOUL_CHILD=1 zsh $HERE/soul-archive.sh $REPO --unarchive --by=work --yes | grep -E '✓|✗|☀️|done:|stop' | sed 's/^/  unarchive: /' || true
 [[ -d $R/.git ]] || { ghq get -p $REPO >/dev/null 2>&1 || ghq get $REPO >/dev/null 2>&1 || true; }
 [[ -d $R/.git ]] || { echo "stop: could not clone $REPO"; exit 1; }
 git -C $R fetch -q origin 2>/dev/null || true
@@ -111,7 +117,7 @@ PY
   echo "  ✓ Laris row: channel $CH, repo $REPO"
 fi
 # --post=<channel or thread id> (Nat 2026-11-08 "/work . in the thread"): the report goes where /work was typed
-BOT=laris-labs-oracle $SAY ${POST:-$CH} "$(report $R | head -c 1900)" --focus $REPO >/dev/null && echo "  ✓ report posted in <#${POST:-$CH}>"
+BOT=laris-labs-oracle $SAY ${POST:-$CH} "$(report $R | head -c $(( 1900 - ${#TAG} )))$TAG" --focus $REPO >/dev/null && echo "  ✓ report posted in <#${POST:-$CH}>"
 okso=()
 if (( ${#todo} )); then
   zsh $HERE/bin/herdr-soul room $REPO $todo --channel=$CH --yes | grep -E 'done:|✗|stop|deny-main: main body on' || true
@@ -120,4 +126,5 @@ print(" ".join(json.load(open(sys.argv[1])).get("groups",{}).get(sys.argv[2],{})
   for o in $todo; do [[ " $now " = *" $o "* ]] && okso+=$o; done
 fi
 all=($insouls $okso); all=(${(u)all})
+soul_where $CH $REPO $POST   # the herdr view in the room; the pointer where /work was typed (unless the report went there)
 echo "RESULT repo=$REPO room=$CH souls=${${(j:,:)all}:--}"
