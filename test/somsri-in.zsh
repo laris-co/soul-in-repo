@@ -31,7 +31,7 @@ R1=$(mkrepo room-one); R2=$(mkrepo room-two); R3=$(mkrepo no-room)
 cat > $T/laris.json <<'J'
 {"groups": {
   "901": {"layout": 9, "repo": "laris-co/room-one", "requireMention": false, "souls": ["neo-oracle"]},
-  "902": {"layout": 9, "repo": "laris-co/room-two", "requireMention": true, "souls": []}
+  "902": {"layout": 9, "repo": "laris-co/room-two", "requireMention": true, "souls": [], "forwardTo": "/x/main", "forwardRoot": true}
 }}
 J
 agents() { print -r -- "{\"result\":{\"agents\":[$1]}}" > $T/agents.json; }
@@ -99,5 +99,7 @@ python3 -I -c 'import json,sys
 a=json.load(open(sys.argv[1])); assert list(a["groups"])==["902"], a' $R2/.somsri/access.json || fail "room two rows"
 rg -q "pass show discord/somsri-oracle-token" $R2/.somsri/launch.sh || fail "room two token"
 rg -q "pane run wB:p1 RESUME=1 $R2/.somsri/launch.sh" $LOG || fail "room two swap: $(cat $LOG)"
-print -r -- "two rooms: two state dirs, one bot, each hears only its own room: ok"
+[[ $out = *"drop forwardTo (/x/main) and forwardRoot"* ]] || fail "forward drop not printed: $out"
+[[ $(shasum $T/laris.json) = $lsum ]] || fail "Laris file edited (room two)"
+print -r -- "two rooms: two state dirs, one bot, each hears only its own room; a forward row gets a printed drop: ok"
 print PASS

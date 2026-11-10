@@ -130,3 +130,5 @@ herdr --session $S pane run $MP "RESUME=1 $D/launch.sh" >/dev/null
 echo "ok  Somsri started in $MP@$S (claude --continue)"
 echo "check: herdr --session $S agent list (claude at $R) · $D/status.json fresh within 30 s · one tagged line in <#$CH>"
 echo "Laris, in your own access file (back it up first): groups[\"$CH\"].requireMention = true   # tag only here now"
+LFWD=$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1]))["groups"][sys.argv[2]].get("forwardTo") or "")' $LARIS $CH)
+if [[ -n $LFWD ]]; then echo "Laris, same row: drop forwardTo ($LFWD) and forwardRoot   # Somsri is this room's main now (#48 forward and #49 are one or the other)"; fi
