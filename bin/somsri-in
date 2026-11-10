@@ -76,6 +76,7 @@ echo "  main checkout  $R  (branch $(git -C $R branch --show-current), not switc
 echo "  main pane      ${MP:-none}@$S  ($MSTATE)"
 echo "  state          $D  (git-excluded)  access.json · body.md · launch.sh"
 echo "  ears           <#$CH> root, every line, rootOnly (threads: no) · guild $GUILD deny · allowFrom Nat + catbutter"
+echo "                 + the room's office thread, every line (looked up on --yes, active or archived) · thread rows of an earlier run kept"
 echo "  soul           $SOUL + room card · bot pass discord/somsri-oracle-token · claude account: repo .envrc, else machine default"
 echo "  plugin         rootOnly $PLUG"
 echo "  Laris row      <#$CH> requireMention $LMENTION -> true  (printed for Laris, not edited here)"
@@ -115,6 +116,38 @@ export DISCORD_BOT_TOKEN="\$(pass show discord/somsri-oracle-token | head -1)"
 exec claude --dangerously-skip-permissions --channels=plugin:discord@claude-plugins-official \${RESUME:+--continue} \\
   --append-system-prompt "\$(cat '$SOUL' '$D/body.md')"
 L
+# office (Nat 2026-11-08 /office: Somsri answers every line there) and the thread rows an earlier run or
+# thread-welcome.ts added (laris-team#242) are kept: a rerun must not make the room Somsri deaf in them
+if [[ -z ${SOMSRI_OFFICE+x} ]]; then
+  OFFICE=$(SOMSRI_TOK="$(pass show discord/somsri-oracle-token | head -1 | tr -d '[:space:]')" python3 -I - $GUILD $CH <<'OFC' 2>/dev/null || true
+import json, os, sys, urllib.request
+g, ch = sys.argv[1:]
+def get(path):
+    rq = urllib.request.Request("https://discord.com/api/v10" + path, headers={"Authorization": "Bot " + os.environ["SOMSRI_TOK"], "User-Agent": "somsri-in (laris-co/soul-in-repo, 1)"})
+    with urllib.request.urlopen(rq, timeout=15) as r: return json.load(r)
+ts = [t for t in get(f"/guilds/{g}/threads/active").get("threads", []) if t.get("parent_id") == ch]
+try: ts += get(f"/channels/{ch}/threads/archived/public?limit=100").get("threads", [])
+except Exception: pass
+print(next((t["id"] for t in ts if t.get("name", "").lower() == "office"), ""))
+OFC
+)
+else OFFICE=$SOMSRI_OFFICE; fi
+OLDACC=""; (( BAK )) && OLDACC=$D/access.json.bak-$ts
+python3 -I - $D/access.json "$OFFICE" "$OLDACC" $CH $NAT $CB <<'ROWS'
+import json, sys
+f, office, old, ch, nat, cb = sys.argv[1:]
+a = json.load(open(f)); g = a["groups"]; kept = 0
+if old:
+    try:
+        for k, r in json.load(open(old)).get("groups", {}).items():
+            if k != ch and k not in g: g[k] = r; kept += 1
+    except Exception: pass
+if office and office not in g:
+    g[office] = {"requireMention": False, "allowFrom": [nat, cb], "note": "office thread of this room: Somsri answers every line (/office)"}
+json.dump(a, open(f, "w"), indent=2, ensure_ascii=False)
+print("ok  office " + (office + " heard, every line" if office else "none in this room (/office later adds it, laris-team#242)")
+      + (" · kept %d thread row(s) of the earlier run" % kept if old else ""))
+ROWS
 chmod 700 $D/launch.sh; chmod 600 $D/access.json
 echo "ok  $D written$( (( BAK )) && print " (old files kept as .bak-$ts)")"
 
