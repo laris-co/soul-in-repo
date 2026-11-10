@@ -26,9 +26,10 @@
 #                                        default channel the repo's layout-9 channel. Last line: RESULT thread= pane= wt=
 #                                        --thread=<id> (link and wt): use that EXISTING thread of the repo channel (unarchived
 #                                        if needed, no new post), refused if it forwards to another worktree.
-#   herdr-soul wt-close <name> [repo] [--bot=<oracle>] [--yes]   unlink it and archive the thread; the worktree stays.
+#   herdr-soul wt-close <name> [repo] [--bot=<oracle>] [--yes]   unlink it and archive the thread; the worktree stays,
+#                                        its wake card goes to herdr-sleep/attic (bin/wake-card-retire, laris-team #237).
 #   herdr-soul out   <oracle> [repo]     plan to take a soul out; --go closes its pane, drops it from the thread's souls[],
-#                                        archives the thread only when no soul is left
+#                                        archives the thread only when no soul is left; its wake card goes to herdr-sleep/attic
 #   herdr-soul ears  <oracle> [repo] [ls]                   threads the soul's body hears (access.json + joined.json)
 #   herdr-soul ears  <oracle> [repo] add|rm <thread> [--all] plan; --go (or --yes) writes the body's own access.json via bin/soul-ears
 #                                        (backup .bak-<ts>-ears first; rm keeps the entry under "removed")
@@ -312,6 +313,8 @@ wt|wt-close)
   if [[ $VERB = wt-close ]]; then
     [[ -d $W ]] || { echo "no worktree $W"; exit 1; }
     echo "wt-close: $W stays (worktree and branch wt/$name kept)"
+    # its wake card goes to the attic (laris-team #237): a closed worktree is not a 💤 sleeper in /ls
+    if (( YES && !DRY )); then python3 $HERE/wake-card-retire $W | sed 's/^/  ✓ /'; else echo "  plan: wake card of $W -> herdr-sleep/attic"; fi
     exec $0 unlink $W $fl
   fi
   [[ -d $R/.git || -f $R/.git ]] || { echo "not a repo: $R"; exit 1; }
@@ -570,8 +573,10 @@ else: print("none")' $LARIS ${key:-x} $o)
     echo "  3. thread ${th:-?} stays open (other souls live there)"
   fi
   echo "  4. worktree stays: $dirty uncommitted, $ahead unpushed — remove later with: git -C $R worktree remove $W"
-  (( GO )) || { echo "(plan only; add --go to do 1-3)"; exit 0; }
+  echo "  5. its wake card (if it sleeps) moves to herdr-sleep/attic: out is not asleep (laris-team #237)"
+  (( GO )) || { echo "(plan only; add --go to do 1-3 and 5)"; exit 0; }
   [[ -n $pane ]] && herdr pane close $pane >/dev/null && echo "  ✓ pane closed"
+  python3 $HERE/wake-card-retire $W | sed 's/^/  ✓ /'
   zsh $HERE/anchor-close $R || true   # the repo's anchor space goes when this was the last space under it
   if [[ -n $th && $left != norow ]]; then
     cp $LARIS $LARIS.bak-$(date +%Y%m%d-%H%M%S)-soul-out
