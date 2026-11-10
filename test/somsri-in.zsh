@@ -37,6 +37,7 @@ J
 agents() { print -r -- "{\"result\":{\"agents\":[$1]}}" > $T/agents.json; }
 agents "{\"pane_id\":\"wA:p1\",\"agent\":\"claude\",\"agent_status\":\"idle\",\"cwd\":\"$R1/\",\"foreground_cwd\":\"$R1\"},
         {\"pane_id\":\"wB:p1\",\"agent\":\"claude\",\"agent_status\":\"idle\",\"cwd\":\"$R2\"}"
+export SOMSRI_OFFICE=""   # no Discord lookup in tests; a case below sets an office id
 export PATH=$T/bin:$PATH HERDR_STUB_LOG=$LOG HERDR_STUB_AGENTS=$T/agents.json GHQ_ROOT=$T/ghq \
   HERDR_SOUL_LARIS=$T/laris.json SOMSRI_PLUGIN_DIR=$T/plugin SOMSRI_HOME=$T/somsri HERDR_SESSION=laris-co SOMSRI_WAIT_MS=1000
 sum() { shasum $T/laris.json; git -C $1 status --porcelain; ls -a $1; cat $1/.git/info/exclude 2>/dev/null; }
@@ -65,12 +66,13 @@ print -r -- "refuses: no room row · a worktree · plugin without rootOnly · no
 agents "{\"pane_id\":\"wA:p1\",\"agent\":\"claude\",\"agent_status\":\"idle\",\"cwd\":\"$R1\"},
         {\"pane_id\":\"wB:p1\",\"agent\":\"claude\",\"agent_status\":\"idle\",\"cwd\":\"$R2\"}"
 lsum=$(shasum $T/laris.json); : > $LOG
-out=$(zsh $SIN $R1 --yes)
+out=$(SOMSRI_OFFICE=555 zsh $SIN $R1 --yes)
 python3 -I -c 'import json,sys
 a=json.load(open(sys.argv[1]))
 r=a["groups"]["901"]; assert r["rootOnly"] is True and r["requireMention"] is False, r
 assert set(r["allowFrom"])=={"691531480689541170","917019242094817301"}, r
-assert list(a["groups"])==["901"], a["groups"]
+assert list(a["groups"])==["901","555"], a["groups"]
+assert a["groups"]["555"]["requireMention"] is False, a["groups"]["555"]
 assert a["guilds"]["1560847800881643520"]["deny"] is True, a' $R1/.somsri/access.json || fail "access.json"
 rg -qx '/\.somsri/' $R1/.git/info/exclude || fail "exclude"
 [[ -z $(git -C $R1 status --porcelain) ]] || fail "repo dirty: $(git -C $R1 status --porcelain)"
@@ -84,14 +86,20 @@ rg -q 'room <#901>' $R1/.somsri/body.md || fail "body: room card"
 [[ $out = *'groups["901"].requireMention = true'* ]] || fail "Laris edit not printed: $out"
 order=$(rg -o 'agent wait wA:p1|agent prompt wA:p1 /exit|pane run wA:p1 RESUME=1 \S+' $LOG | tr '\n' '|')
 [[ $order = "agent wait wA:p1|agent prompt wA:p1 /exit|pane run wA:p1 RESUME=1 $R1/.somsri/launch.sh|" ]] || fail "swap order: $order"
-print -r -- "--yes: .somsri written + excluded, token only from pass, rootOnly row + guild deny, swap wait/exit/run in wA:p1, Laris printed: ok"
+print -r -- "--yes: .somsri written + excluded, token only from pass, rootOnly row + guild deny, swap wait/exit/run in wA:p1, office row, Laris printed: ok"
 
 # 4. online already: refuse; rerun after it went stale makes backups
 print '{}' > $R1/.somsri/status.json
 out=$(zsh $SIN $R1 --yes 2>&1) && fail "online: exit 0"; [[ $out = *"already online"* ]] || fail "online: $out"
 touch -t 202001010000 $R1/.somsri/status.json
+python3 -I -c 'import json,sys
+f=sys.argv[1]; a=json.load(open(f)); a["groups"]["777"]={"requireMention":False,"note":"thread-welcome row"}; json.dump(a,open(f,"w"))' $R1/.somsri/access.json
 out=$(zsh $SIN $R1 --yes) ; [[ $out = *"old files kept as .bak-"* ]] || fail "rerun: $out"
-print -r -- "already online (fresh status.json): refused; stale: rerun with backups: ok"
+[[ $out = *"kept 2 thread row(s) of the earlier run"* ]] || fail "rerun rows: $out"
+python3 -I -c 'import json,sys
+g=json.load(open(sys.argv[1]))["groups"]; assert set(g)=={"901","555","777"}, g
+assert g["901"]["rootOnly"] is True, g' $R1/.somsri/access.json || fail "rerun lost rows: $(cat $R1/.somsri/access.json)"
+print -r -- "already online (fresh status.json): refused; stale: rerun with backups, office + thread rows kept: ok"
 
 # 5. a second room: its own state dir, same bot
 out=$(zsh $SIN laris-co/room-two --yes)
