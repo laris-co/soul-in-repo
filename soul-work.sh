@@ -9,10 +9,13 @@
 #           never a second room
 # 3 report  posted in the room: what it is (README), last commits, open PRs + issues, checkouts on this machine
 #           (room-status: worktrees, agents, 🧹 stale)
-# 4 souls   each <oracle> not in the room yet: herdr-soul room <repo> <oracle> --channel=<id> --yes
+# 4 main    the repo's herdr space on its main checkout with a plain claude main agent (bin/main-pane, #48): reused when
+#           live, else started; the Laris row forwards the room ROOT's untagged lines to it (forwardTo + forwardRoot,
+#           laris-team#241). Skipped when the main is a bot body (.discord/) or the room's Somsri (.somsri/, #49).
+# 5 souls   each <oracle> not in the room yet: herdr-soul room <repo> <oracle> --channel=<id> --yes
 # --post=<id>: post the report in that channel or thread instead of the room (/work typed inside a room).
 # Plan by default: the report is printed, nothing is created or posted. --yes runs (Nat's or catbutter's go).
-# Last line of a run: RESULT repo=<o/r> room=<id> souls=<a,b|->
+# Last line of a run: RESULT repo=<o/r> room=<id> souls=<a,b|-> main=<pane@session|->
 # Tag + where (Nat 2026-11-09 "if /work or archive tag me let me see where go", "and then can you check like /ls"):
 #   SOUL_TAG=<discord user id>  every line posted in the room ends with <@id>, so the caller is pinged there
 #   SOUL_FROM=<channel id>      where the command was typed; when that is not the room, '<@id> 👉 <#room>' is posted there
@@ -65,7 +68,9 @@ fi
 todo=(${ORACLES:|insouls})
 if [[ -n $CH ]]; then echo "  2. room: ♻️ <#$CH> exists -> reuse${${have:#NOROW}:+ (souls: ${(j:, :)insouls:-none})}"
 else echo "  2. room: create '$PREFIX$CHN' under ⚡ active + Laris row"; fi
-for o in $todo; do echo "  4. soul $o: herdr-soul room $REPO $o --channel=${CH:-<new>} --yes"; done
+if [[ -d $R/.git ]]; then mainplan=$(zsh $HERE/bin/main-pane $R | tail -1); else mainplan="MAIN - planned (after the clone)"; fi
+echo "  4. main: ${mainplan#MAIN }"
+for o in $todo; do echo "  5. soul $o: herdr-soul room $REPO $o --channel=${CH:-<new>} --yes"; done
 (( ${#ORACLES} > ${#todo} )) && echo "     already in the room: ${(j:, :)${ORACLES:*insouls}}"
 
 report() {   # $1 = repo path (may be missing in a plan)
@@ -118,6 +123,22 @@ PY
 fi
 # --post=<channel or thread id> (Nat 2026-11-08 "/work . in the thread"): the report goes where /work was typed
 BOT=laris-labs-oracle $SAY ${POST:-$CH} "$(report $R | head -c $(( 1900 - ${#TAG} )))$TAG" --focus $REPO >/dev/null && echo "  ✓ report posted in <#${POST:-$CH}>"
+# 4. main pane (#48): reuse or start; the room's root talks to it through the Laris row (forwardRoot, laris-team#241)
+MAINLINE=$(zsh $HERE/bin/main-pane $R --yes | tail -1); MAIN=${${=MAINLINE}[2]}
+echo "  ✓ main: ${MAINLINE#MAIN }"
+PLUGDIR=${SOMSRI_PLUGIN_DIR:-$HOME/.claude/plugins/cache/claude-plugins-official/discord}
+if [[ $MAIN != - && $MAINLINE != *skip* ]] && ! rg -q forwardRoot $PLUGDIR/*/server.ts(N) $PLUGDIR/*/laris/rowpolicy.ts(N) /dev/null 2>/dev/null; then
+  echo "  -- Laris row not pointed at main: this machine's plugin has no forwardRoot (laris-team#241), a plain forwardTo would take threads too"
+elif [[ $MAIN != - && $MAINLINE != *skip* ]]; then
+  python3 - $L $CH $R <<'PY2'
+import json,sys,shutil,time
+f,ch,r=sys.argv[1:]; a=json.load(open(f)); row=a.get("groups",{}).get(ch)
+if row is not None and not (row.get("forwardTo")==r and row.get("forwardRoot") is True):
+    shutil.copy2(f, f+".bak-"+time.strftime("%Y%m%d-%H%M%S")+"-main")
+    row["forwardTo"]=r; row["forwardRoot"]=True
+    json.dump(a,open(f,"w"),indent=2,ensure_ascii=False); print("  ✓ Laris row: room root (untagged) -> main "+r)
+PY2
+fi
 okso=()
 if (( ${#todo} )); then
   zsh $HERE/bin/herdr-soul room $REPO $todo --channel=$CH --yes | grep -E 'done:|✗|stop|deny-main: main body on' || true
@@ -127,4 +148,4 @@ print(" ".join(json.load(open(sys.argv[1])).get("groups",{}).get(sys.argv[2],{})
 fi
 all=($insouls $okso); all=(${(u)all})
 soul_where $CH $REPO $POST   # the herdr view in the room; the pointer where /work was typed (unless the report went there)
-echo "RESULT repo=$REPO room=$CH souls=${${(j:,:)all}:--}"
+echo "RESULT repo=$REPO room=$CH souls=${${(j:,:)all}:--} main=${${MAIN:#-}:--}"

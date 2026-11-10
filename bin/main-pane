@@ -1,0 +1,55 @@
+#!/usr/bin/env zsh
+# main-pane <repo path> [--yes] — the repo's herdr space on its MAIN checkout, with a plain claude main agent in it
+# (issue #48, Nat 2026-11-10: "must have space in herdr but just no wt just main pane!"). Used by /work (soul-work.sh).
+#
+#   live agent at the main checkout (cwd or foreground_cwd)  -> reuse it, never a second one
+#   the repo's space exists, a pane there has no agent       -> start claude in that pane
+#   the repo's space exists, every pane is busy               -> split one, start claude in the new pane
+#   no space                                                  -> create it at the main checkout (label <repo>), start claude
+# claude runs as `claude --continue || claude` (the last main conversation comes back) in the pane's own shell, so
+# the repo's .envrc (direnv) picks the claude account; no .envrc = the machine default. No bot token: one bot = one body.
+# A repo whose main checkout is a bot body (.discord/launch.sh: Somsri's center; .somsri/: a room Somsri, #49) is
+# left alone: that body is the main.
+# Plan by default. --yes acts. Last line always: MAIN <pane>@<session> <reused|started|planned|skip> [<why>]
+set -euo pipefail
+R=${1:?repo path}; YES=0; [[ ${2:-} = --yes ]] && YES=1
+R=${R%/}; [[ -d $R ]] && R=${R:A}
+S=${HERDR_SESSION:-laris-co}
+[[ -d $R/.git ]] || { echo "MAIN - skip no main checkout at $R"; exit 0; }
+[[ -f $R/.discord/launch.sh ]] && { echo "MAIN - skip main is a bot body ($R/.discord)"; exit 0; }
+[[ -f $R/.somsri/launch.sh ]] && { echo "MAIN - skip main is the room's Somsri ($R/.somsri, #49)"; exit 0; }
+
+# pane_id agent status workspace for every pane at the main checkout; '-' = no agent
+PANES=$(herdr --session $S pane list 2>/dev/null | python3 -I -c 'import json,sys
+r=sys.argv[1]
+try: ps=json.load(sys.stdin)["result"]["panes"]
+except Exception: ps=[]
+for p in ps:
+    if r in {(p.get(k) or "").rstrip("/") for k in ("cwd","foreground_cwd")}:
+        print(p["pane_id"], p.get("agent") or "-", p.get("agent_status") or "-", p.get("workspace_id") or "-")' $R)
+WS=$(herdr --session $S worktree list --cwd $R 2>/dev/null | python3 -I -c 'import json,sys
+try: print(json.load(sys.stdin)["result"]["source"].get("source_workspace_id") or "")
+except Exception: print("")')
+live=$(print -r -- "$PANES" | awk '$2!="-"{print; exit}')
+if [[ -n $live ]]; then echo "MAIN ${live%% *}@$S reused (${${=live}[2]} ${${=live}[3]})"; exit 0; fi
+free=$(print -r -- "$PANES" | awk -v w="$WS" '$2=="-" && (w=="" || $4==w){print $1; exit}')
+pick() { python3 -I -c 'import sys,re; m=re.search(r"\"pane_id\": ?\"([^\"]+)\"", sys.stdin.read()); print(m.group(1) if m else "")'; }
+if [[ -n $free ]]; then how="start claude in its free pane $free"
+elif [[ -n $WS ]]; then how="split a pane of space $WS, start claude there"
+else how="create space '${R:t}' at $R, start claude there"; fi
+(( YES )) || { echo "plan: main of ${R:t}: $how"; echo "MAIN ${free:--}@$S planned"; exit 0; }
+
+if [[ -n $free ]]; then P=$free
+elif [[ -n $WS ]]; then
+  any=$(herdr --session $S pane list 2>/dev/null | python3 -I -c 'import json,sys
+w=sys.argv[1]
+try: print(next(p["pane_id"] for p in json.load(sys.stdin)["result"]["panes"] if p.get("workspace_id")==w))
+except Exception: print("")' $WS)
+  [[ -n $any ]] || { echo "MAIN -@$S skip space $WS has no pane"; exit 1; }
+  P=$(herdr --session $S pane split $any --direction down --cwd $R --no-focus 2>/dev/null | pick)
+else
+  P=$(herdr --session $S workspace create --cwd $R --label ${R:t} --no-focus | pick)
+fi
+[[ -n $P ]] || { echo "MAIN -@$S skip herdr gave no pane"; exit 1; }
+herdr --session $S pane run $P "cd '$R' && { claude --continue || claude; }" >/dev/null
+echo "MAIN $P@$S started"
