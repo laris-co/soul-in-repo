@@ -1,0 +1,132 @@
+#!/usr/bin/env zsh
+# somsri-in <repo path | owner/repo> [--yes] [--pane <id>] — Somsri becomes the voice of ONE room, in that room's main pane
+# (issue #49, Nat 2026-11-10: "god eyes and soul in repo and mz forwarder should have somsri? individual?").
+#
+#   📦 room <owner>/<repo>
+#    ├─ root (untagged)  ── Somsri bot ──▶ <repo> main pane   (this script)
+#    ├─ @Laris           ── Laris answers (tag only in a room with a Somsri)
+#    └─ › soul threads   ── each soul's own bot ──▶ wt/<o>-soul   (Somsri does not hear them: rootOnly)
+#
+# One bot, several bodies: every Somsri body hears ONLY its own room root. Its access.json has the room row with
+# rootOnly: true (laris-team plugin, soul-in-repo#49 (a)) and a guild row deny, so threads and other rooms are silent.
+#
+# Plan by default (reads only). --yes:
+#   1. <repo>/.somsri/ (added to .git/info/exclude): access.json · body.md (room card) · launch.sh
+#      launch.sh: bot token from pass discord/somsri-oracle-token at run time, DISCORD_STATE_DIR=.somsri, claude account
+#      from the repo's .envrc (direnv) else the machine default, soul = somsri-oracle/CLAUDE.md + body.md,
+#      RESUME=1 adds --continue (the main pane's conversation goes on, now as Somsri).
+#   2. swap the room's main pane: wait until its agent is idle, /exit it, run RESUME=1 .somsri/launch.sh in the same pane.
+#   3. PRINT the Laris row edit (requireMention: true, so the room does not get two answers). Laris applies it to its
+#      own access file; this script never edits another bot's access file.
+# Refuses: no Laris layout-9 row for the repo · plugin without rootOnly · this room's Somsri already online · no main pane.
+# Never: posts to Discord, edits Laris' files, writes the token to disk, switches the repo's branch.
+set -euo pipefail
+YES=0; PANE=""; ARG=""
+while (( $# )); do case $1 in --yes) YES=1; shift;; --dry) YES=0; shift;; --pane) PANE=${2:?--pane <id>}; shift 2;;
+  -h|--help) sed -n 2,23p $0; exit 0;; --*) echo "unknown $1"; exit 2;; *) ARG=$1; shift;; esac; done
+[[ -n $ARG ]] || { echo "which repo? somsri-in <repo path | owner/repo> [--yes] [--pane <id>]"; exit 2; }
+GUILD=1560847800881643520; NAT=691531480689541170; CB=917019242094817301
+S=${HERDR_SESSION:-laris-co}
+LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}
+PLUGIN=${SOMSRI_PLUGIN_DIR:-$HOME/.claude/plugins/cache/claude-plugins-official/discord}
+ghq=${GHQ_ROOT:-$(ghq root)}
+SOUL=${SOMSRI_HOME:-$ghq/github.com/laris-co/somsri-oracle}/CLAUDE.md
+if [[ -d $ARG ]]; then R=${ARG:A}; else R=$ghq/github.com/${${ARG#https://github.com/}%.git}; fi
+R=${R%/}; [[ -e $R ]] && R=${R:A}
+[[ -d $R/.git || -f $R/.git ]] || { echo "XX  not a repo checkout: $R"; exit 1; }
+GD=$(git -C $R rev-parse --path-format=absolute --git-common-dir)
+[[ ${GD:h:A} = $R ]] || { echo "XX  $R is a worktree; Somsri lives in the repo's MAIN checkout (${GD:h})"; exit 1; }
+SLUG=$(git -C $R remote get-url origin | sed -E 's#(git@github.com:|https://github.com/|ssh://git@github.com/)##; s#\.git$##')
+D=$R/.somsri
+
+# the room: Laris' layout-9 row for this repo
+[[ -f $LARIS ]] || { echo "XX  no Laris access file $LARIS"; exit 1; }
+CH=$(python3 -I -c 'import json,sys
+g=json.load(open(sys.argv[1])).get("groups",{})
+print(next((k for k,r in g.items() if isinstance(r,dict) and r.get("layout")==9 and r.get("repo")==sys.argv[2]),""))' $LARIS $SLUG)
+[[ -n $CH ]] || { echo "XX  no layout-9 room row for $SLUG in Laris' access ($LARIS): /work $SLUG first"; exit 1; }
+LMENTION=$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1]))["groups"][sys.argv[2]].get("requireMention")).lower())' $LARIS $CH)
+
+# the plugin must know rootOnly, or this body would hear every soul thread of the room (findGroupPolicy step 2)
+if rg -q 'rootOnly' $PLUGIN/*/server.ts(N) $PLUGIN/*/laris/rowpolicy.ts(N) /dev/null 2>/dev/null; then PLUG=ok
+else PLUG="MISSING (laris-team rootOnly PR not installed: just plugin-patch)"; fi
+[[ -f $SOUL ]] || { echo "XX  no Somsri soul at $SOUL"; exit 1; }
+
+# online already? the plugin writes <state dir>/status.json every 30 s while the gateway runs
+ONLINE=""
+if [[ -f $D/status.json ]]; then
+  age=$(( $(date +%s) - $(stat -f %m $D/status.json 2>/dev/null || stat -c %Y $D/status.json) ))
+  (( age < 120 )) && ONLINE="status.json ${age}s old"
+fi
+
+# the room's main pane: a claude agent whose cwd (or foreground cwd) is the main checkout
+AG=$(herdr --session $S agent list 2>/dev/null | python3 -I -c 'import json,sys
+r=sys.argv[1].rstrip("/")
+try: ags=json.load(sys.stdin)["result"]["agents"]
+except Exception: ags=[]
+for a in ags:
+    cwds={(a.get(k) or "").rstrip("/") for k in ("cwd","foreground_cwd")}
+    if r in cwds: print(a["pane_id"], a.get("agent") or "-", a.get("agent_status") or "-"); break' $R)
+if [[ -n $PANE ]]; then MP=$PANE; MSTATE="given (--pane)"
+elif [[ -n $AG ]]; then MP=${AG%% *}; MSTATE=${AG#* }
+else MP=""; MSTATE="none"; fi
+
+echo "plan: Somsri in room <#$CH> ($SLUG)"
+echo "  main checkout  $R  (branch $(git -C $R branch --show-current), not switched)"
+echo "  main pane      ${MP:-none}@$S  ($MSTATE)"
+echo "  state          $D  (git-excluded)  access.json · body.md · launch.sh"
+echo "  ears           <#$CH> root, every line, rootOnly (threads: no) · guild $GUILD deny · allowFrom Nat + catbutter"
+echo "  soul           $SOUL + room card · bot pass discord/somsri-oracle-token · claude account: repo .envrc, else machine default"
+echo "  plugin         rootOnly $PLUG"
+echo "  Laris row      <#$CH> requireMention $LMENTION -> true  (printed for Laris, not edited here)"
+[[ -n $ONLINE ]] && { echo "XX  this room's Somsri is already online ($ONLINE): one body per room, nothing to do"; exit 1; }
+[[ $PLUG = ok ]] || { echo "XX  plugin without rootOnly: install laris-team's rootOnly patch on this machine first"; exit 1; }
+[[ -n $MP ]] || { echo "XX  no main pane for $R in herdr $S (open one: /work $SLUG, or give --pane <id>)"; exit 1; }
+(( YES )) || { echo "dry: nothing touched (add --yes to run)"; exit 0; }
+
+pass show discord/somsri-oracle-token >/dev/null || { echo "XX  no pass discord/somsri-oracle-token"; exit 1; }
+mkdir -p $D; chmod 700 $D
+EX=$GD/info/exclude; mkdir -p ${EX:h}; touch $EX
+rg -qx '/?\.somsri/?' $EX || print '/.somsri/' >> $EX
+ts=$(date +%Y%m%d-%H%M%S)
+BAK=0; for f in access.json body.md launch.sh; do [[ -f $D/$f ]] && { cp -p $D/$f $D/$f.bak-$ts; BAK=1; }; done
+cat > $D/access.json <<J
+{ "dmPolicy": "allowlist", "allowFrom": [], "pending": {},
+  "groups": { "$CH": { "requireMention": false, "rootOnly": true, "allowFrom": ["$NAT", "$CB"], "repo": "$SLUG",
+    "note": "Somsri of $SLUG: this room's root, every line; its threads are not heard (rootOnly)" } },
+  "guilds": { "$GUILD": { "deny": true, "note": "a room Somsri hears only its own room root" } } }
+J
+cat > $D/body.md <<B
+# somsri-oracle, room body of $SLUG (soul-in-repo#49)
+
+You are **somsri-oracle**, the voice of room <#$CH> ($SLUG), running in its main pane at $R. Your soul is the text above.
+- Ears: this room's root, every line. Its threads belong to their souls (each with its own bot); you do not hear them.
+- Laris answers here only when tagged. Do not answer for a soul; point to its thread.
+- You work in the main checkout: never switch its branch; code goes through a worktree branch + PR.
+- Every report starts with: machine · pane · path (branch). Edit only $D, never another bot's access file.
+B
+cat > $D/launch.sh <<L
+#!/bin/zsh
+cd '$R'
+command -v direnv >/dev/null && eval "\$(direnv export zsh 2>/dev/null)"   # the repo's .envrc: claude account, tools
+export DISCORD_STATE_DIR='$D'
+export DISCORD_ORACLE=somsri-oracle
+export DISCORD_BOT_TOKEN="\$(pass show discord/somsri-oracle-token | head -1)"
+exec claude --dangerously-skip-permissions --channels=plugin:discord@claude-plugins-official \${RESUME:+--continue} \\
+  --append-system-prompt "\$(cat '$SOUL' '$D/body.md')"
+L
+chmod 700 $D/launch.sh; chmod 600 $D/access.json
+echo "ok  $D written$( (( BAK )) && print " (old files kept as .bak-$ts)")"
+
+# swap: the plain main agent quits (transcript stays), Somsri resumes its conversation in the same pane
+AGENT=$(print -r -- "$AG" | awk '{print $2}')
+if [[ -n $AGENT && $AGENT != - && ( -z $PANE || ${AG%% *} = $PANE ) ]]; then
+  herdr --session $S agent wait $MP --until idle --until done --timeout ${SOMSRI_WAIT_MS:-600000} >/dev/null \
+    || { echo "XX  $MP did not go idle; nothing swapped. Run later: herdr --session $S pane run $MP 'RESUME=1 $D/launch.sh' after /exit"; exit 1; }
+  herdr --session $S agent prompt $MP "/exit" >/dev/null
+  herdr --session $S pane wait-output $MP --regex '(took [0-9]+[hms]|[%$❯] *$)' --source recent --timeout 60000 >/dev/null 2>&1 || true
+fi
+herdr --session $S pane run $MP "RESUME=1 $D/launch.sh" >/dev/null
+echo "ok  Somsri started in $MP@$S (claude --continue)"
+echo "check: herdr --session $S agent list (claude at $R) · $D/status.json fresh within 30 s · one tagged line in <#$CH>"
+echo "Laris, in your own access file (back it up first): groups[\"$CH\"].requireMention = true   # tag only here now"
