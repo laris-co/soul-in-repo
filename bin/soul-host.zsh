@@ -8,8 +8,15 @@
 #   SOUL_HOST_CWD=<folder>     its body's folder (the repo main it runs in), when known
 #   HERDR_SESSION=<session>    its herdr session (herdr sets it for every pane)
 SOUL_LARIS_GUILD=1560847800881643520
+# a bot's state dir when SOUL_HOST_STATE is not given: channels/<bot> or channels/<bot>-<machine> (phonebooth-oracle-white),
+# the one whose status.json was written last (the live body), as laris-team tools/thread-here.py bot_dir()
+sh_state_dir() {   # newest first via zsh glob qualifier om: works on Linux and macOS (stat -c is GNU only)
+  local b=$1; local -a s
+  s=($HOME/.claude/channels/($b|$b-*)/status.json(N.om))
+  if (( ${#s} )); then print -r -- ${s[1]:h:t}; else print -r -- $b; fi
+}
 SH_BOT=${SOUL_HOST:-laris-labs-oracle}
-SH_DIR=${SOUL_HOST_STATE:-$SH_BOT}
+SH_DIR=${SOUL_HOST_STATE:-$(sh_state_dir $SH_BOT)}
 SH_ACC=$HOME/.claude/channels/$SH_DIR/access.local.json
 SH_GUILD=${SOUL_GUILD:-$SOUL_LARIS_GUILD}
 if [[ $SH_BOT == laris-labs-oracle ]]; then SH_NAME=Laris; else SH_NAME=${(C)${SH_BOT%-oracle}}; fi
