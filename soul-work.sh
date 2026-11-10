@@ -32,7 +32,8 @@ set -euo pipefail
 HERE=${0:A:h}
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
 HOST=${SOUL_HOST:-laris-labs-oracle}
-HOSTDIR=${SOUL_HOST_STATE:-$HOST}
+source $HERE/bin/soul-host.zsh   # sh_state_dir: <bot> or <bot>-<machine>, newest status.json
+HOSTDIR=${SOUL_HOST_STATE:-$(sh_state_dir $HOST)}
 L=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/$HOSTDIR/access.local.json}
 LARIS_GUILD=1560847800881643520
 GUILD=${SOUL_GUILD:-$LARIS_GUILD}
