@@ -21,12 +21,23 @@
 #   SOUL_FROM=<channel id>      where the command was typed; when that is not the room, '<@id> 👉 <#room>' is posted there
 #   when the run ends, the repo's part of `maw ls` is posted in the room (laris-team tools/room-ls.sh)
 #   SOUL_CHILD=1                a step of a bigger command (/work's unarchive, room /done): tag only, no pointer, no view
+# Any server's host (Nat 2026-11-10 "ahhh it still fixed always fixed for this?", "ok we fix?"): /work typed to another
+# server's host bot (PhoneBooth in Phone booth Co Ltd) makes the room THERE, with that bot's row and voice. The plugin
+# sets these when the bot that answered is a host (access.host); unset = Laris Labs Oracle in Laris Labs Ltd, as before.
+#   SOUL_HOST=<oracle>          the bot: token pass discord/<oracle>-token, posts as it
+#   SOUL_HOST_STATE=<dir>       its state dir name under ~/.claude/channels (default = SOUL_HOST), for access.local.json
+#   SOUL_GUILD=<id>             its server; the room category is SOUL_PROMOTE_CATEGORY, else a category named "active"
+#                               there, else "⚡ active" is created (on a run)
 set -euo pipefail
 HERE=${0:A:h}
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
-L=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}
-GUILD=1560847800881643520
-ROOMCAT=${SOUL_PROMOTE_CATEGORY:-1568658399149821952}   # ⚡ active
+HOST=${SOUL_HOST:-laris-labs-oracle}
+HOSTDIR=${SOUL_HOST_STATE:-$HOST}
+L=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/$HOSTDIR/access.local.json}
+LARIS_GUILD=1560847800881643520
+GUILD=${SOUL_GUILD:-$LARIS_GUILD}
+[[ $GUILD == $LARIS_GUILD ]] && ROOMCAT=${SOUL_PROMOTE_CATEGORY:-1568658399149821952} || ROOMCAT=${SOUL_PROMOTE_CATEGORY:-}   # ⚡ active
+HNAME=${${HOST%-oracle}:-laris}; [[ $HOST == laris-labs-oracle ]] && HNAME=Laris || HNAME=${(C)HNAME}
 PREFIX=${SOUL_CHPREFIX-📦・}
 SAY=$TEAM/tools/discord-say.sh
 source $HERE/bin/soul-tag.zsh   # TAG, FROM, soul_where <room> <repo> [<also-skip channel>]
@@ -40,8 +51,14 @@ REPO=$(print -r -- $REPO | cut -d/ -f1-2)
 [[ $REPO =~ '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' ]] || { echo "which repo? soul-work.sh <owner/repo | github url> [<oracle>...] [--yes]"; exit 2; }
 ORACLES=(${(u)ORACLES})
 R=$ghq/github.com/$REPO
-LT=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
+LT=$(pass show discord/$HOST-token | head -1 | tr -d '[:space:]')
 api() { curl -sS -H "Authorization: Bot $LT" -H 'Content-Type: application/json' -H 'User-Agent: soul-work (laris-co/soul-in-repo, 1)' "$@"; }
+# the room category in another host's server: one whose name holds "active" (⚡ active), else made on a run
+if [[ -z $ROOMCAT ]]; then
+  ROOMCAT=$(api https://discord.com/api/v10/guilds/$GUILD/channels | python3 -c 'import json,sys
+c=[x for x in json.load(sys.stdin) if x.get("type")==4 and "active" in x.get("name","").lower()]
+print(c[0]["id"] if c else "")' 2>/dev/null || true)
+fi
 (( YES )) && how=RUN || how="plan only"
 vis=$(gh repo view $REPO --json visibility -q .visibility 2>/dev/null || true)
 [[ -n $vis ]] || { echo "stop: $REPO not found on GitHub (or no access)"; exit 1; }
@@ -67,8 +84,12 @@ fi
 [[ $have = NOROW ]] && insouls=() || insouls=(${=have})
 todo=(${ORACLES:|insouls})
 if [[ -n $CH ]]; then echo "  2. room: ♻️ <#$CH> exists -> reuse${${have:#NOROW}:+ (souls: ${(j:, :)insouls:-none})}"
-else echo "  2. room: create '$PREFIX$CHN' under ⚡ active + Laris row"; fi
-if [[ -d $R/.git ]]; then mainplan=$(zsh $HERE/bin/main-pane $R | tail -1); else mainplan="MAIN - planned (after the clone)"; fi
+else echo "  2. room: create '$PREFIX$CHN' under ⚡ active (${ROOMCAT:-new category}) in guild $GUILD + $HNAME row ($HOSTDIR)"; fi
+# the host's own body runs in this repo's main (PhoneBooth in PhoneBooth-project/phonebooth-oracle): no second main agent,
+# and its row must not forward the room to itself
+SELFMAIN=0; [[ -n ${SOUL_HOST_CWD:-} && ${SOUL_HOST_CWD:A} == ${R:A} ]] && SELFMAIN=1
+if (( SELFMAIN )); then mainplan="MAIN - skip main is the host's own body ($HOST)"
+elif [[ -d $R/.git ]]; then mainplan=$(zsh $HERE/bin/main-pane $R | tail -1); else mainplan="MAIN - planned (after the clone)"; fi
 echo "  4. main: ${mainplan#MAIN }"
 for o in $todo; do echo "  5. soul $o: herdr-soul room $REPO $o --channel=${CH:-<new>} --yes"; done
 (( ${#ORACLES} > ${#todo} )) && echo "     already in the room: ${(j:, :)${ORACLES:*insouls}}"
@@ -103,6 +124,12 @@ report $R | sed 's/^/     | /'
 [[ -d $R/.git ]] || { echo "stop: could not clone $REPO"; exit 1; }
 git -C $R fetch -q origin 2>/dev/null || true
 echo "  ✓ repo $R"
+if [[ -z $CH && -z $ROOMCAT ]]; then
+  ROOMCAT=$(api -X POST https://discord.com/api/v10/guilds/$GUILD/channels -d '{"name":"⚡ active","type":4}' \
+    | python3 -c 'import json,sys;print(json.load(sys.stdin).get("id",""))')
+  [[ -n $ROOMCAT ]] || { echo "stop: could not create category '⚡ active' in guild $GUILD"; exit 1; }
+  echo "  ✓ category '⚡ active' created: $ROOMCAT"
+fi
 if [[ -z $CH ]]; then
   CH=$(api -X POST https://discord.com/api/v10/guilds/$GUILD/channels \
     -d "$(python3 -c 'import json,sys;print(json.dumps({"name":sys.argv[1],"type":0,"parent_id":sys.argv[2],"topic":"repo "+sys.argv[3]+": /work room; one thread per oracle soul"}))' "$PREFIX$CHN" $ROOMCAT $REPO)" \
@@ -111,20 +138,22 @@ if [[ -z $CH ]]; then
   echo "  ✓ channel '$PREFIX$CHN' created: $CH"
 fi
 if [[ $have = NOROW ]]; then
+  [[ -f $L ]] || { (umask 077; print -r -- '{}' > $L); echo "  ✓ $L created"; }
   cp -p $L $L.bak-$(date +%Y%m%d-%H%M%S)-work
-  python3 - $L $CH "$CHN" $REPO <<'PY'
+  python3 - $L $CH "$CHN" $REPO $HNAME <<'PY'
 import json,sys
-f,ch,chn,repo=sys.argv[1:]; a=json.load(open(f)); g=a.setdefault("groups",{})
+f,ch,chn,repo,who=sys.argv[1:]; a=json.load(open(f)); g=a.setdefault("groups",{})
 g.setdefault(ch,{"requireMention":False,"allowFrom":["691531480689541170","917019242094817301"],"layout":9,"channel":chn,
-  "repo":repo,"souls":[],"threads":{},"note":f"repo channel {chn} (layout 9): opened by /work; Laris hears every line, answers only when tagged"})
+  "repo":repo,"souls":[],"threads":{},"note":f"repo channel {chn} (layout 9): opened by /work; {who} hears every line, answers only when tagged"})
 json.dump(a,open(f,"w"),indent=2,ensure_ascii=False)
 PY
-  echo "  ✓ Laris row: channel $CH, repo $REPO"
+  echo "  ✓ $HNAME row: channel $CH, repo $REPO"
 fi
 # --post=<channel or thread id> (Nat 2026-11-08 "/work . in the thread"): the report goes where /work was typed
-BOT=laris-labs-oracle $SAY ${POST:-$CH} "$(report $R | head -c $(( 1900 - ${#TAG} )))$TAG" --focus $REPO >/dev/null && echo "  ✓ report posted in <#${POST:-$CH}>"
+BOT=$HOST $SAY ${POST:-$CH} "$(report $R | head -c $(( 1900 - ${#TAG} )))$TAG" --focus $REPO >/dev/null && echo "  ✓ report posted in <#${POST:-$CH}>"
 # 4. main pane (#48): reuse or start; the room's root talks to it through the Laris row (forwardRoot, laris-team#241)
-MAINLINE=$(zsh $HERE/bin/main-pane $R --yes | tail -1); MAIN=${${=MAINLINE}[2]}
+if (( SELFMAIN )); then MAINLINE="MAIN - skip main is the host's own body ($HOST)"; else MAINLINE=$(zsh $HERE/bin/main-pane $R --yes | tail -1); fi
+MAIN=${${=MAINLINE}[2]}
 echo "  ✓ main: ${MAINLINE#MAIN }"
 PLUGDIR=${SOMSRI_PLUGIN_DIR:-$HOME/.claude/plugins/cache/claude-plugins-official/discord}
 if [[ $MAIN != - && $MAINLINE != *skip* ]] && ! rg -q forwardRoot $PLUGDIR/*/server.ts(N) $PLUGDIR/*/laris/rowpolicy.ts(N) /dev/null 2>/dev/null; then
