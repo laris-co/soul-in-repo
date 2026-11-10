@@ -28,10 +28,11 @@
 #   SOUL_CHILD=1                a step of a bigger command (/work's unarchive, room /done): tag only, no pointer, no view
 set -euo pipefail
 HERE=${0:A:h}
-L=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}
-GUILD=1560847800881643520
-ARCH=${SOUL_ARCHIVE_CATEGORY:-1566648836359856249}    # 🗄️ Archive
-ACTIVE=${SOUL_PROMOTE_CATEGORY:-1568658399149821952}  # ⚡ active
+source $HERE/bin/soul-host.zsh   # SH_BOT / SH_ACC / SH_GUILD: Laris unless another server's host runs this
+L=${HERDR_SOUL_LARIS:-$SH_ACC}
+GUILD=$SH_GUILD
+ARCH=${SOUL_ARCHIVE_CATEGORY:-$(sh_cat 1566648836359856249 archive)}    # 🗄️ Archive
+ACTIVE=${SOUL_PROMOTE_CATEGORY:-$(sh_cat 1568658399149821952 active)}  # ⚡ active
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
 SAY=$TEAM/tools/discord-say.sh
 SP=${SOUL_SPACE_SLEEP:-$TEAM/tools/space-sleep.sh}   # sleep / wake / where / draft / on <machine> (laris-team)
@@ -43,7 +44,7 @@ for a in "$@"; do case $a in --yes) YES=1;; --dry) DRY=1;; --unarchive) UN=1;; -
 (( DRY )) && YES=0
 [[ $REPO =~ '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' ]] || { echo "which repo? soul-archive.sh <owner/repo> [--unarchive] [--yes]"; exit 2; }
 R=$(ghq root)/github.com/$REPO
-LT=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
+LT=$(sh_token)
 api() { curl -sS -H "Authorization: Bot $LT" -H 'Content-Type: application/json' -H 'User-Agent: soul-archive (laris-co/soul-in-repo, 1)' "$@"; }
 row=$(python3 - $L $REPO <<'PY'
 import json,sys
@@ -134,7 +135,7 @@ PY
     t=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["groups"][sys.argv[2]].get("threads",{}).get(sys.argv[3],""))' $L $CH $o)
     [[ -n $t ]] && api -o /dev/null -w "  ✓ $o: thread $t open again (HTTP %{http_code})\n" -X PATCH https://discord.com/api/v10/channels/$t -d '{"archived":false}' || true
   done
-  BOT=laris-labs-oracle $SAY $CH "📦 **unarchived** by $BY · waking: ${${(j:, :)wnames}:-none}${fresh:+ · back in: ${(j:, :)fresh}}$TAG" >/dev/null && echo "  ✓ line in the room"
+  BOT=$SH_BOT $SAY $CH "📦 **unarchived** by $BY · waking: ${${(j:, :)wnames}:-none}${fresh:+ · back in: ${(j:, :)fresh}}$TAG" >/dev/null && echo "  ✓ line in the room"
   for b in $wake; do
     IFS=$'\t' read -r who kind cwd mach lab <<< "$b"
     [[ $mach = $HOST ]] && mach=local
@@ -221,14 +222,14 @@ done
 for w in $wts; do
   l=(${=LOC[$w]})
   if [[ $l[1] != none ]] && ! idle $l[3]; then kept+="${w:t} ($l[2] $l[3])"; continue; fi
-  zsh $HERE/bin/herdr-soul unlink $w --bot=laris-labs-oracle --yes 2>&1 | grep -E '✓|✗' | sed "s/^/  ${w:t}: /" || true
+  zsh $HERE/bin/herdr-soul unlink $w --bot=$SH_BOT --yes 2>&1 | grep -E '✓|✗' | sed "s/^/  ${w:t}: /" || true
   nap ${w:t} wt $w --close
 done
 nap main main $R   # space kept here: anchor-close below closes it when nothing is left under it
 for o in $others; do api -o /dev/null -w "  ✓ thread '${o#* }' archived (HTTP %{http_code})\n" -X PATCH https://discord.com/api/v10/channels/${o%% *} -d '{"archived":true}'; done
 mainline=""; [[ -n ${(M)kept:#main *} ]] && mainline=" · main still working: ${${(M)kept:#main *}#main }"
 others_kept=(${kept:#main *})
-BOT=laris-labs-oracle $SAY $CH "🗄️ **archived** by $BY · 💤 asleep: ${${(j:, :)asleep}:-none}${others_kept:+ · kept (working): ${(j:, :)others_kept}}$mainline · worktrees + repo kept (nothing deleted) · \`/work\` here wakes them$TAG" >/dev/null && echo "  ✓ line in the room"
+BOT=$SH_BOT $SAY $CH "🗄️ **archived** by $BY · 💤 asleep: ${${(j:, :)asleep}:-none}${others_kept:+ · kept (working): ${(j:, :)others_kept}}$mainline · worktrees + repo kept (nothing deleted) · \`/work\` here wakes them$TAG" >/dev/null && echo "  ✓ line in the room"
 api -o /dev/null -w "  ✓ channel to 🗄️ Archive (HTTP %{http_code})\n" -X PATCH https://discord.com/api/v10/channels/$CH -d "{\"parent_id\":\"$ARCH\"}"
 cp -p $L $L.bak-$(date +%Y%m%d-%H%M%S)-archive
 python3 - $L $CH $REC <<'PY'

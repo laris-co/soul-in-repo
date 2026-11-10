@@ -21,7 +21,8 @@
 # Runs on the machine of the Laris host bot (m5 today). Tokens only from pass, never printed.
 set -euo pipefail
 oracle=${1:?oracle}; repo=${2:?repo}; shift 2
-CAT=${SOUL_CATEGORY:-1568651567144374314}   # 📦 repos category (Nat 2026-11-07 'organize'; was 🔬・research 1560847801838215259)
+source ${0:A:h}/bin/soul-host.zsh   # SH_BOT / SH_ACC / SH_GUILD: Laris unless another server's host runs this
+CAT=${SOUL_CATEGORY:-$(sh_cat 1568651567144374314 active)}   # 📦 repos category (Nat 2026-11-07 'organize'; was 🔬・research 1560847801838215259)
 CHNAME=${CHNAME:-slash}
 PREFIX=${SOUL_CHPREFIX-📦・}   # icon prefix for a NEW channel (Nat's pilot room); SOUL_CHPREFIX= for none
 CHPIN=""
@@ -32,7 +33,7 @@ while (( $# )); do case $1 in
   *) echo "unknown $1"; echo "  usage: $0 <oracle> <repo> [--category <id>] [--channel <id>] [--chname slash|dash] [--migrate] [--deny-main] [--dry]"; exit 2;; esac; done
 [[ $CHNAME = (slash|dash) ]] || { echo "--chname is slash or dash, not '$CHNAME'"; echo "  $0 $oracle $repo --chname dash --dry"; exit 2; }
 FL=""; (( MIG )) && FL+=" --migrate"   # flags to repeat in a printed fix line
-GUILD=1560847800881643520
+GUILD=$SH_GUILD
 NAT=691531480689541170; CB=917019242094817301
 TEAM=/opt/Code/github.com/laris-co/laris-team
 ghq=$(ghq root)
@@ -106,7 +107,7 @@ if (( DENYMAIN )); then
   if [[ -z $MACH || $MACH = $HOST ]]; then echo "      deny-main: groups[channel '$CHN' id] deny+earsOff in $ML (main body here on $HOST; backup first)"
   else echo "      deny-main: main body lives on $MACH: print the herdr --machine prompt for its agent (no ssh edit)"; fi
 fi
-LT=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
+LT=$(sh_token)
 ST=$(pass show discord/$oracle-token | head -1 | tr -d '[:space:]')
 api()  { curl -sS -H "Authorization: Bot $LT" -H 'Content-Type: application/json' "$@"; }   # Laris: the channel
 sapi() { curl -sS -H "Authorization: Bot $ST" -H 'Content-Type: application/json' "$@"; }   # the soul: its thread
@@ -259,7 +260,7 @@ P=$(HERDR_SESSION=$S zsh ${0:A:h}/bin/repo-space "$R" "$W" "wt/$oracle-soul")   
 herdr --session $S pane run $P "$W/.discord/launch.sh" >/dev/null
 fi
 # 6. Laris channel row: one per repo channel, requireMention false like the souls (Nat "why not same?"), answers only when tagged; old thread row kept (Nothing is Deleted)
-L=$HOME/.claude/channels/laris-labs-oracle/access.local.json
+L=$SH_ACC; sh_acc_ready
 cp $L $L.bak-$(date +%Y%m%d-%H%M%S)-soul-$name
 python3 - $L $CH "$CHN" $TH "$oracle" "$full" "${OLD:-}" <<'PY'
 import json, sys

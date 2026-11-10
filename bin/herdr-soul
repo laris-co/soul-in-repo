@@ -48,7 +48,8 @@
 set -euo pipefail
 HERE=${0:A:h}
 TEAM=${HERDR_SOUL_TEAM:-/opt/Code/github.com/laris-co/laris-team}
-LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}   # override for tests
+source ${0:A:h}/soul-host.zsh   # SH_BOT / SH_ACC: Laris unless another server's host runs this
+LARIS=${HERDR_SOUL_LARIS:-$SH_ACC}   # override for tests
 GHQ=$(ghq root)
 SCRIPT=${HERDR_SOUL_SCRIPT:-$HERE/../soul-in-repo.sh}
 EARS_BIN=${HERDR_SOUL_EARS:-$HERE/soul-ears}
@@ -308,7 +309,7 @@ wt|wt-close)
   name=${ARGS[2]:?"name: herdr-soul $VERB <name> [repo] [--channel=<id>] [--bot=<oracle>] [--yes]"}
   [[ $name =~ '^[A-Za-z0-9][A-Za-z0-9._-]*$' ]] || { echo "name: letters, digits, '.', '_' and '-', not '$name'"; exit 2; }
   R=$(repo_path ${ARGS[3]:-}); W=$R/wt/$name
-  (( BOTSET )) || BOT=laris-labs-oracle
+  (( BOTSET )) || BOT=$SH_BOT
   fl=(--bot=$BOT); (( YES && !DRY )) && fl+=--yes
   if [[ $VERB = wt-close ]]; then
     [[ -d $W ]] || { echo "no worktree $W"; exit 1; }
@@ -399,7 +400,7 @@ print(next((k for k,v in g.items() if v.get("layout")==9 and v.get("repo")==sys.
     [[ -n $CH ]] || { echo "no layout-9 channel for $full in Laris rows: pass --channel=<id>"; exit 1; }
   fi
   if [[ -z $BPANE ]]; then  # the bot body's pane: the agent whose cwd is the bot's home
-    case $BOT in somsri-oracle) home=$GHQ/github.com/laris-co/somsri-oracle;; laris-labs-oracle) home=$TEAM;; *) home=$(soul_dir $BOT);; esac
+    case $BOT in somsri-oracle) home=$GHQ/github.com/laris-co/somsri-oracle;; laris-labs-oracle) home=$TEAM;; $SH_BOT) home=${SOUL_HOST_CWD:-$(soul_dir $BOT)};; *) home=$(soul_dir $BOT);; esac
     BPANE=$(herdr agent list 2>/dev/null | python3 -c 'import json,sys
 h=sys.argv[1]; a=json.load(sys.stdin)["result"]["agents"]
 print(next((x["pane_id"] for x in a if x.get("cwd")==h and x.get("agent")=="claude"),""))' $home)
@@ -583,7 +584,7 @@ else: print("none")' $LARIS ${key:-x} $o)
     what=$(python3 $HERE/soul-row-out $LARIS $key $o) && echo "  ✓ Laris row: $what ($o out)"
   fi
   if [[ -n $th ]] && { (( l9 )) || [[ $left = none ]]; }; then
-    T=$(pass show discord/laris-labs-oracle-token | head -1 | tr -d '[:space:]')
+    T=$(sh_token)
     code=$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH -H "Authorization: Bot $T" -H 'Content-Type: application/json' \
       -d '{"archived":true}' https://discord.com/api/v10/channels/$th)
     echo "  ✓ thread archive: HTTP $code"

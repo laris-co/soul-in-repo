@@ -53,7 +53,9 @@ def ghq_root():
 
 GHQ = ghq_root()
 TEAM = os.environ.get("HERDR_SOUL_TEAM", "/opt/Code/github.com/laris-co/laris-team")
-LARIS = os.environ.get("HERDR_SOUL_LARIS", os.path.join(HOME, ".claude/channels/laris-labs-oracle/access.local.json"))
+# any server's host (Nat 2026-11-10 "make it cool now fool loop ?"): SOUL_HOST / SOUL_HOST_STATE from its plugin; unset = Laris
+HOSTBOT = os.environ.get("SOUL_HOST") or "laris-labs-oracle"
+LARIS = os.environ.get("HERDR_SOUL_LARIS", os.path.join(HOME, ".claude/channels", os.environ.get("SOUL_HOST_STATE") or HOSTBOT, "access.local.json"))
 CHANNELS = os.environ.get("HERDR_SOUL_CHANNELS", os.path.join(HOME, ".claude/channels"))
 SOMSRI = os.environ.get("HERDR_SOUL_SOMSRI", os.path.join(GHQ, "github.com/laris-co/somsri-oracle/.discord/access.json"))
 HERE_BOX = os.environ.get("HERDR_SOUL_MACHINE", socket.gethostname().split(".")[0].lower())
@@ -81,7 +83,7 @@ def cfg(oracle, key):
 
 def access_files():
     seen, out = set(), []
-    for bot, path in [("laris-labs-oracle", LARIS)] + \
+    for bot, path in [(HOSTBOT, LARIS)] + \
             [(os.path.basename(os.path.dirname(p)), p) for p in sorted(glob.glob(os.path.join(CHANNELS, "*", "access.local.json")))] + \
             [("somsri-oracle", SOMSRI)]:
         real = os.path.realpath(path)
@@ -131,7 +133,7 @@ def laris_token():
     if t:
         return t
     try:
-        return subprocess.run(["pass", "show", "discord/laris-labs-oracle-token"], capture_output=True, text=True,
+        return subprocess.run(["pass", "show", f"discord/{HOSTBOT}-token"], capture_output=True, text=True,
                               check=True).stdout.splitlines()[0].strip()
     except Exception:
         return None
@@ -160,7 +162,7 @@ def main(argv):
             add("unreadable", bot, "-", path, "check the JSON by hand: python3 -m json.tool " + path)
             continue
         nrows += len(g)
-        if bot == "laris-labs-oracle":
+        if bot == HOSTBOT:
             laris = g
         for key, r in g.items():
             fw = r.get("forwardTo")
