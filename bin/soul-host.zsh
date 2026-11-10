@@ -10,12 +10,10 @@
 SOUL_LARIS_GUILD=1560847800881643520
 # a bot's state dir when SOUL_HOST_STATE is not given: channels/<bot> or channels/<bot>-<machine> (phonebooth-oracle-white),
 # the one whose status.json was written last (the live body), as laris-team tools/thread-here.py bot_dir()
-sh_state_dir() {
-  local b=$1 best=$1 bt=0 d t
-  for d in $HOME/.claude/channels/$b(N/) $HOME/.claude/channels/$b-*(N/); do
-    t=$(stat -c %Y $d/status.json 2>/dev/null || echo 0); (( t > bt )) && { bt=$t; best=${d:t} }
-  done
-  print -r -- $best
+sh_state_dir() {   # newest first via zsh glob qualifier om: works on Linux and macOS (stat -c is GNU only)
+  local b=$1; local -a s
+  s=($HOME/.claude/channels/($b|$b-*)/status.json(N.om))
+  if (( ${#s} )); then print -r -- ${s[1]:h:t}; else print -r -- $b; fi
 }
 SH_BOT=${SOUL_HOST:-laris-labs-oracle}
 SH_DIR=${SOUL_HOST_STATE:-$(sh_state_dir $SH_BOT)}
