@@ -44,7 +44,7 @@ sum() { shasum $T/laris.json; git -C $1 status --porcelain; ls -a $1; cat $1/.gi
 # 1. plan: reads only
 before=$(sum $R1); out=$(zsh $SIN laris-co/room-one)
 [[ $out = *"room <#901> (laris-co/room-one)"* && $out = *"main pane      wA:p1@laris-co"* ]] || fail "plan: $out"
-[[ $out = *"requireMention False -> true"* && $out = *"dry: nothing touched"* ]] || fail "plan text: $out"
+[[ $out = *"requireMention false -> true"* && $out = *"dry: nothing touched"* ]] || fail "plan text: $out"
 [[ $(sum $R1) = $before ]] || fail "plan changed files"
 ! rg -q 'pass show|pane run|agent prompt' $LOG || fail "plan called: $(cat $LOG)"
 print -r -- "plan reads only, finds room 901 + main pane by cwd with a trailing slash: ok"

@@ -45,7 +45,7 @@ CH=$(python3 -I -c 'import json,sys
 g=json.load(open(sys.argv[1])).get("groups",{})
 print(next((k for k,r in g.items() if isinstance(r,dict) and r.get("layout")==9 and r.get("repo")==sys.argv[2]),""))' $LARIS $SLUG)
 [[ -n $CH ]] || { echo "XX  no layout-9 room row for $SLUG in Laris' access ($LARIS): /work $SLUG first"; exit 1; }
-LMENTION=$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1]))["groups"][sys.argv[2]].get("requireMention")).lower())' $LARIS $CH)
+LMENTION=$(python3 -I -c 'import json,sys;print(json.dumps(json.load(open(sys.argv[1]))["groups"][sys.argv[2]].get("requireMention")))' $LARIS $CH)
 
 # the plugin must know rootOnly, or this body would hear every soul thread of the room (findGroupPolicy step 2)
 if rg -q 'rootOnly' $PLUGIN/*/server.ts(N) $PLUGIN/*/laris/rowpolicy.ts(N) /dev/null 2>/dev/null; then PLUG=ok
