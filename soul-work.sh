@@ -62,7 +62,7 @@ fi
 (( YES )) && how=RUN || how="plan only"
 vis=$(gh repo view $REPO --json visibility -q .visibility 2>/dev/null || true)
 [[ -n $vis ]] || { echo "stop: $REPO not found on GitHub (or no access)"; exit 1; }
-echo "work: $REPO (${vis:l}) · souls: ${(j:, :)ORACLES:-none} · $how"
+echo "work: $REPO (${vis:l}) · souls: ${(j:, :)ORACLES:-none} · $how · host $HOST${SOUL_HOST_CWD:+ (cwd from plugin)}"
 if [[ -d $R/.git ]]; then echo "  1. repo: $R"; else echo "  1. repo: ghq get -p $REPO -> $R"; fi
 CHN=${(L)REPO/\//∕}
 CH=$(api https://discord.com/api/v10/guilds/$GUILD/channels | python3 -c 'import json,sys
@@ -87,7 +87,13 @@ if [[ -n $CH ]]; then echo "  2. room: ♻️ <#$CH> exists -> reuse${${have:#NO
 else echo "  2. room: create '$PREFIX$CHN' under ⚡ active (${ROOMCAT:-new category}) in guild $GUILD + $HNAME row ($HOSTDIR)"; fi
 # the host's own body runs in this repo's main (PhoneBooth in PhoneBooth-project/phonebooth-oracle): no second main agent,
 # and its row must not forward the room to itself
-SELFMAIN=0; [[ -n ${SOUL_HOST_CWD:-} && ${SOUL_HOST_CWD:A} == ${R:A} ]] && SELFMAIN=1
+# the host body's folder: SOUL_HOST_CWD from the plugin, else the cwd its own status.json records (met 2026-11-10: a
+# /work typed in a PhoneBooth thread arrived without SOUL_HOST_CWD and pointed the row at PhoneBooth's own body again).
+# Laris keeps its old behaviour (its laris-team room may rely on the forward), so the fallback is for other hosts only
+[[ $HOST == laris-labs-oracle && -z ${SOUL_HOST_CWD:-} ]] && HOSTCWD='' || HOSTCWD=${SOUL_HOST_CWD:-$(python3 -c 'import json,sys
+try: print(json.load(open(sys.argv[1])).get("cwd") or "")
+except Exception: print("")' $HOME/.claude/channels/$HOSTDIR/status.json 2>/dev/null)}
+SELFMAIN=0; [[ -n $HOSTCWD && ${HOSTCWD:A} == ${R:A} ]] && SELFMAIN=1
 if (( SELFMAIN )); then mainplan="MAIN - skip main is the host's own body ($HOST)"
 elif [[ -d $R/.git ]]; then mainplan=$(zsh $HERE/bin/main-pane $R | tail -1); else mainplan="MAIN - planned (after the clone)"; fi
 echo "  4. main: ${mainplan#MAIN }"
