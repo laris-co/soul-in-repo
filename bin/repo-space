@@ -6,7 +6,8 @@
 # the main pane's space; bin/main-pane starts the main agent there, /work does it).
 set -euo pipefail
 R=${1:?repo path}; W=${2:?worktree path}; LABEL=${3:?label}
-S=${HERDR_SESSION:-laris-co}
+# Session: the team's from <repo>/team.yaml (bin/team-session, Nat 2026-11-11), else the caller's.
+read -r S _ < <(zsh ${0:A:h}/team-session $R)
 wsof() { herdr --session $S worktree list --cwd "$R" | python3 -c 'import sys,json
 try: print(json.load(sys.stdin)["result"]["source"].get("source_workspace_id") or "")
 except Exception: print("")'; }

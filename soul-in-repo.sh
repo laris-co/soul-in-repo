@@ -61,7 +61,8 @@ echo "      thread '$oracle' in it, found/reused/unarchived or opened by the $or
 echo "      worktree $W (branch soul/$oracle) · bot $oracle · claude $ctok · DISCORD_ORACLE=$oracle"
 echo "      ears: thread '$oracle', requireMention false (its own thread) · eyes: guild read-only · note: $NOTE"
 echo "      Laris row: the CHANNEL '$CHN', requireMention false (hears every line, answers only when tagged), souls[] += $oracle, threads{$oracle}"
-S=${HERDR_SESSION:-laris-co}
+# herdr session: the team's (<repo>/team.yaml session:, bin/team-session, Nat 2026-11-11), else the caller's
+read -r S _ < <(zsh ${0:A:h}/bin/team-session $R)
 OLD=""; P=""
 if (( MIG )); then
   # the live body's state dir: <wt>/.discord, or the DISCORD_STATE_DIR its launch line exports, or the older

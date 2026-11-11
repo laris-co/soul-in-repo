@@ -10,14 +10,17 @@
 # the repo's .envrc (direnv) picks the claude account; no .envrc = the machine default. No bot token: one bot = one body.
 # A repo whose main checkout is a bot body (.discord/launch.sh: Somsri's center; .somsri/: a room Somsri, #49) is
 # left alone: that body is the main.
+# The session is the team's (bin/team-session: <repo>/team.yaml `session:`, Nat 2026-11-11 "herdr session = team charter =
+# repo"), else the caller's. A team.yaml session that is not running is never started: the caller's is used and said.
 # Plan by default. --yes acts. Last line always: MAIN <pane>@<session> <reused|started|planned|skip> [<why>]
 set -euo pipefail
 R=${1:?repo path}; YES=0; [[ ${2:-} = --yes ]] && YES=1
 R=${R%/}; [[ -d $R ]] && R=${R:A}
-S=${HERDR_SESSION:-laris-co}
 [[ -d $R/.git ]] || { echo "MAIN - skip no main checkout at $R"; exit 0; }
 [[ -f $R/.discord/launch.sh ]] && { echo "MAIN - skip main is a bot body ($R/.discord)"; exit 0; }
 [[ -f $R/.somsri/launch.sh ]] && { echo "MAIN - skip main is the room's Somsri ($R/.somsri, #49)"; exit 0; }
+read -r S SSRC < <(zsh ${0:A:h}/team-session $R)
+NOTE=""; [[ $SSRC = team.yaml:* ]] && NOTE=" (team.yaml session ${${SSRC#team.yaml:}%-not-running} not running: used $S)"
 
 # pane_id agent status workspace for every pane at the main checkout; '-' = no agent
 PANES=$(herdr --session $S pane list 2>/dev/null | python3 -I -c 'import json,sys
@@ -31,13 +34,13 @@ WS=$(herdr --session $S worktree list --cwd $R 2>/dev/null | python3 -I -c 'impo
 try: print(json.load(sys.stdin)["result"]["source"].get("source_workspace_id") or "")
 except Exception: print("")')
 live=$(print -r -- "$PANES" | awk '$2!="-"{print; exit}')
-if [[ -n $live ]]; then echo "MAIN ${live%% *}@$S reused (${${=live}[2]} ${${=live}[3]})"; exit 0; fi
+if [[ -n $live ]]; then echo "MAIN ${live%% *}@$S reused (${${=live}[2]} ${${=live}[3]})$NOTE"; exit 0; fi
 free=$(print -r -- "$PANES" | awk -v w="$WS" '$2=="-" && (w=="" || $4==w){print $1; exit}')
 pick() { python3 -I -c 'import sys,re; m=re.search(r"\"pane_id\": ?\"([^\"]+)\"", sys.stdin.read()); print(m.group(1) if m else "")'; }
 if [[ -n $free ]]; then how="start claude in its free pane $free"
 elif [[ -n $WS ]]; then how="split a pane of space $WS, start claude there"
 else how="create space '${R:t}' at $R, start claude there"; fi
-(( YES )) || { echo "plan: main of ${R:t}: $how"; echo "MAIN ${free:--}@$S planned"; exit 0; }
+(( YES )) || { echo "plan: main of ${R:t}: $how, in herdr session $S ($SSRC)"; echo "MAIN ${free:--}@$S planned$NOTE"; exit 0; }
 
 if [[ -n $free ]]; then P=$free
 elif [[ -n $WS ]]; then
@@ -52,4 +55,4 @@ else
 fi
 [[ -n $P ]] || { echo "MAIN -@$S skip herdr gave no pane"; exit 1; }
 herdr --session $S pane run $P "cd '$R' && { claude --continue || claude; }" >/dev/null
-echo "MAIN $P@$S started"
+echo "MAIN $P@$S started$NOTE"

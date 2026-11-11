@@ -5,7 +5,8 @@
 # and no agent runs at the main checkout (an oracle whose body is that main keeps it). Prints what it did.
 set -euo pipefail
 R=${1:?repo path}; DRY=0; [[ ${2:-} = --dry ]] && DRY=1
-S=${HERDR_SESSION:-laris-co}
+# herdr session: the team's (<repo>/team.yaml session:, bin/team-session, Nat 2026-11-11), else the caller's
+read -r S _ < <(zsh ${0:A:h}/team-session $R)
 info=$(herdr --session $S worktree list --cwd "$R" 2>/dev/null | python3 -c 'import json,sys
 try: d=json.load(sys.stdin)["result"]
 except Exception: print("-"); sys.exit()
