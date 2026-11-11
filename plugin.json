@@ -1,0 +1,20 @@
+{
+  "name": "soul",
+  "version": "0.1.0",
+  "entry": "./maw-plugin/src/index.ts",
+  "sdk": "^1.0.0",
+  "target": "js",
+  "description": "Put an oracle's soul to work inside another repo: list oracles, see the souls of a repo, preflight, bring a soul in, take it out, move a live body to #repo. A thin front for bin/herdr-soul and soul-in-repo.sh (laris-co/soul-in-repo); the herdr plugin laris.soul calls the same scripts.",
+  "author": "neo-oracle",
+  "cli": {
+    "command": "soul",
+    "help": "maw soul <list|ls|check|in|out|migrate|help> [oracle] [repo] [--dry] [--yes] [--deny-main] — in, out and migrate print the plan; add --yes to run it (they write access rows: only on Nat's go from a terminal)."
+  },
+  "capabilities": [
+    "proc:exec:zsh"
+  ],
+  "weight": 0,
+  "tier": "extra",
+  "license": "MIT",
+  "schemaVersion": 1
+}
