@@ -26,7 +26,6 @@ while (( $# )); do case $1 in --yes) YES=1; shift;; --dry) YES=0; shift;; --pane
   -h|--help) sed -n 2,23p $0; exit 0;; --*) echo "unknown $1"; exit 2;; *) ARG=$1; shift;; esac; done
 [[ -n $ARG ]] || { echo "which repo? somsri-in <repo path | owner/repo> [--yes] [--pane <id>]"; exit 2; }
 GUILD=1560847800881643520; NAT=691531480689541170; CB=917019242094817301
-S=${HERDR_SESSION:-laris-co}
 LARIS=${HERDR_SOUL_LARIS:-$HOME/.claude/channels/laris-labs-oracle/access.local.json}
 PLUGIN=${SOMSRI_PLUGIN_DIR:-$HOME/.claude/plugins/cache/claude-plugins-official/discord}
 ghq=${GHQ_ROOT:-$(ghq root)}
@@ -34,6 +33,8 @@ SOUL=${SOMSRI_HOME:-$ghq/github.com/laris-co/somsri-oracle}/CLAUDE.md
 if [[ -d $ARG ]]; then R=${ARG:A}; else R=$ghq/github.com/${${ARG#https://github.com/}%.git}; fi
 R=${R%/}; [[ -e $R ]] && R=${R:A}
 [[ -d $R/.git || -f $R/.git ]] || { echo "XX  not a repo checkout: $R"; exit 1; }
+# herdr session: the team's (<repo>/team.yaml session:, bin/team-session, Nat 2026-11-11), else the caller's
+read -r S _ < <(zsh ${0:A:h}/team-session $R)
 GD=$(git -C $R rev-parse --path-format=absolute --git-common-dir)
 [[ ${GD:h:A} = $R ]] || { echo "XX  $R is a worktree; Somsri lives in the repo's MAIN checkout (${GD:h})"; exit 1; }
 SLUG=$(git -C $R remote get-url origin | sed -E 's#(git@github.com:|https://github.com/|ssh://git@github.com/)##; s#\.git$##')

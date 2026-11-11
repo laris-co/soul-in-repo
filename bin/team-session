@@ -1,0 +1,25 @@
+#!/usr/bin/env zsh
+# team-session <repo path> — the herdr session a repo's spaces belong in. Prints "<session> <source>".
+# Nat 2026-11-11: "each herdr session id = team charter = repo, same name, and the config file in the repo".
+# The charter lives in the team repo as team.yaml (cmmc-avengers-team, phonebooth-team; Nat 2026-11-01: "team
+# charter config here, not in laris-co"); its `session:` line names the session.
+#
+#   <repo>/team.yaml has session: S and S is running  -> "S team.yaml"
+#   session: S but S is not running                  -> "<current> team.yaml:S-not-running"  (we never start one)
+#   no team.yaml / no session: line                   -> "<current> current"
+# <current> = $HERDR_SESSION (herdr sets it in every pane), else laris-co. Read-only: never writes, never starts.
+set -euo pipefail
+R=${1:?repo path}; R=${R%/}
+CUR=${HERDR_SESSION:-laris-co}
+S=""
+[[ -f $R/team.yaml ]] && S=$(python3 -I -c 'import re,sys
+for l in open(sys.argv[1], encoding="utf-8"):
+    m = re.match(r"session:\s*[\"\x27]?([A-Za-z0-9._-]+)", l)
+    if m: print(m.group(1)); break' $R/team.yaml 2>/dev/null || true)
+if [[ -z $S ]]; then print -r -- "$CUR current"; exit 0; fi
+[[ $S = $CUR ]] && { print -r -- "$S team.yaml"; exit 0; }
+if herdr session list 2>/dev/null | awk -v s="$S" '$1==s && $2=="running"{f=1} END{exit !f}'; then
+  print -r -- "$S team.yaml"
+else
+  print -r -- "$CUR team.yaml:$S-not-running"
+fi
