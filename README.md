@@ -126,6 +126,9 @@ A thin maw plugin in `maw-plugin/`: every verb runs `bin/herdr-soul`, nothing is
 
 Built 2026-11-05/06 by Laris Labs Oracle (AI) with Nat in #research › repo-soul.
 
+- **Tool feed:** souls show their tool calls in their thread (`🔧 Bash: …`, `✅ N tools · time`) through the Discord plugin
+  (claude-discord-channel `0.0.4-sbs.3`+). Off per body: `DISCORD_TOOL_FEED=0`. How it works, config, traps: `docs/TOOL-FEED.md`.
+
 ## Development
 
 ```bash
