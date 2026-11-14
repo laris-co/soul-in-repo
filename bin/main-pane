@@ -8,8 +8,10 @@
 #   no space                                                  -> create it at the main checkout (label <repo>), start claude
 # claude runs as `claude --continue || claude` (the last main conversation comes back) in the pane's own shell, so
 # the repo's .envrc (direnv) picks the claude account; no .envrc = the machine default. No bot token: one bot = one body.
-# A repo whose main checkout is a bot body (.discord/launch.sh: Somsri's center; .somsri/: a room Somsri, #49) is
-# left alone: that body is the main.
+# A repo whose main checkout is a bot body is left alone: that body is the main. Three markers, every generation:
+# .discord/launch.sh (Somsri's center), .somsri/launch.sh (a room Somsri, #49), and an .envrc that sets
+# DISCORD_STATE_DIR or DISCORD_BOT_TOKEN (direnv gives the pane that bot: PhoneBooth, ting, fireman... 2026-11-12,
+# a /work on m5 woke PhoneBooth's bot there while white ran it). Always skipped, wherever the bot runs now.
 # The session is the team's (bin/team-session: <repo>/team.yaml `session:`, Nat 2026-11-11 "herdr session = team charter =
 # repo"), else the caller's. A team.yaml session that is not running is never started: the caller's is used and said.
 # Plan by default. --yes acts. Last line always: MAIN <pane>@<session> <reused|started|planned|skip> [<why>]
@@ -19,6 +21,11 @@ R=${R%/}; [[ -d $R ]] && R=${R:A}
 [[ -d $R/.git ]] || { echo "MAIN - skip no main checkout at $R"; exit 0; }
 [[ -f $R/.discord/launch.sh ]] && { echo "MAIN - skip main is a bot body ($R/.discord)"; exit 0; }
 [[ -f $R/.somsri/launch.sh ]] && { echo "MAIN - skip main is the room's Somsri ($R/.somsri, #49)"; exit 0; }
+botenv() { [[ -f $1/.envrc ]] || return 1; local l
+  while IFS= read -r l || [[ -n $l ]]; do
+    [[ $l =~ '^[[:space:]]*(export[[:space:]]+)?(DISCORD_(STATE_DIR|BOT_TOKEN))=' ]] && { print -r -- $match[2]; return 0; }
+  done < $1/.envrc; return 1; }
+V=$(botenv $R) && { echo "MAIN - skip main is a bot body ($R/.envrc sets $V)"; exit 0; }
 read -r S SSRC < <(zsh ${0:A:h}/team-session $R)
 NOTE=""; [[ $SSRC = team.yaml:* ]] && NOTE=" (team.yaml session ${${SSRC#team.yaml:}%-not-running} not running: used $S)"
 
