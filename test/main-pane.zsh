@@ -58,6 +58,17 @@ for d in .discord .somsri; do mkdir -p $R/$d; : > $R/$d/launch.sh; : > $LOG
   [[ $(zsh $MP $R --yes) = "MAIN - skip"* ]] || fail "$d not skipped"; [[ ! -s $LOG ]] || fail "$d: herdr called"; rm -rf $R/$d; done
 print -r -- "main is a bot body (.discord/ or .somsri/): skipped, herdr not called: ok"
 
+# 5b. main is a bot body marked only in .envrc (PhoneBooth, 2026-11-12): skipped, herdr untouched
+for l in 'export DISCORD_STATE_DIR="$HOME/.claude/channels/x-oracle"' '  DISCORD_BOT_TOKEN="$(pass show discord/x-token)"'; do
+  print -r -- "use flake"$'\n'"$l" > $R/.envrc; : > $LOG
+  out=$(zsh $MP $R --yes); [[ $out = "MAIN - skip main is a bot body ($R/.envrc sets DISCORD_"* ]] || fail ".envrc not skipped: $out"
+  [[ ! -s $LOG ]] || fail ".envrc: herdr called"; done
+# a commented line, or another DISCORD_ variable, is not a bot body
+print -r -- '# export DISCORD_STATE_DIR=/old'$'\n''export DISCORD_TOKEN_ENTRY_NOTE=x' > $R/.envrc; panes ""; ws "" ""
+[[ $(zsh $MP $R | tail -1) = "MAIN -@laris-co planned" ]] || fail "commented .envrc skipped: $(zsh $MP $R)"
+rm -f $R/.envrc
+print -r -- "main is a bot body by .envrc (DISCORD_STATE_DIR / DISCORD_BOT_TOKEN): skipped; commented line is not: ok"
+
 # 6. anchor-close keeps the space while a main agent runs there (foreground_cwd only / trailing slash)
 ws wS ""; agents "{\"pane_id\":\"wS:p1\",\"cwd\":\"/elsewhere\",\"foreground_cwd\":\"$R/\"}"; : > $LOG
 out=$(zsh $HERE/bin/anchor-close $R); [[ $out = *"kept: an agent runs at main (wS:p1)"* ]] || fail "anchor-close: $out"
